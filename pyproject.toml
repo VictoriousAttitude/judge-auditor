@@ -6,6 +6,7 @@ build-backend = "hatchling.build"
 name = "judge-auditor"
 version = "0.1.0"
 description = "Measure how much your LLM-as-judge disagrees with itself before you trust it."
+readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "judge-auditor" }]
