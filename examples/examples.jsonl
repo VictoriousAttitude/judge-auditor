@@ -1,0 +1,6 @@
+{"id": "ex1", "prompt": "What is the capital of France?", "response_a": "The capital of France is Paris.", "quality_label": 1.0, "metadata": {"category": "factual"}}
+{"id": "ex2", "prompt": "What is 2 + 2?", "response_a": "2 + 2 equals 4.", "quality_label": 1.0, "metadata": {"category": "math"}}
+{"id": "ex3", "prompt": "Summarize photosynthesis in one sentence.", "response_a": "Plants convert sunlight, water, and carbon dioxide into glucose and oxygen.", "quality_label": 1.0, "metadata": {"category": "science"}}
+{"id": "ex4", "prompt": "Who wrote Romeo and Juliet?", "response_a": "Romeo and Juliet was written by William Shakespeare.", "quality_label": 1.0, "metadata": {"category": "factual"}}
+{"id": "ex5", "prompt": "What is the boiling point of water at sea level?", "response_a": "Water boils at 100 degrees Celsius at sea level.", "quality_label": 1.0, "metadata": {"category": "science"}}
+{"id": "ex6", "prompt": "Name a primary color.", "response_a": "Red is a primary color.", "quality_label": 1.0, "metadata": {"category": "factual"}}

@@ -22,3 +22,6 @@ htmlcov/
 *.jsonl
 audit_*.json
 reports/
+
+# ...but keep the bundled example fixtures used by the CLI smoke test
+!examples/*.jsonl
