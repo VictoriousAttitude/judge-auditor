@@ -50,3 +50,8 @@ python_version = "3.11"
 strict = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
+
+# scipy ships no type stubs; trust it at the boundary while staying strict elsewhere.
+[[tool.mypy.overrides]]
+module = ["scipy.*"]
+ignore_missing_imports = true
