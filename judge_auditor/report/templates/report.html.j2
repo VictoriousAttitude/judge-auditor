@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Judge Auditor — Reliability Report</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #1a1d24; --ink: #e7e9ee; --muted: #9aa3b2;
+    --line: #2a2f3a; --accent: #6ea8fe;
+    --high: #2fbf71; --moderate: #e8b14a; --low: #e0566b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .sub b { color: var(--ink); font-weight: 600; }
+  .headline {
+    border-radius: 14px; padding: 20px 24px; margin-bottom: 28px;
+    border: 1px solid var(--line); background: var(--panel);
+    border-left: 8px solid var(--muted);
+  }
+  .headline.high { border-left-color: var(--high); }
+  .headline.moderate { border-left-color: var(--moderate); }
+  .headline.low { border-left-color: var(--low); }
+  .verdict { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .verdict b { font-size: 26px; letter-spacing: 0; text-transform: none; display: block; margin-top: 2px; }
+  .verdict.high b { color: var(--high); }
+  .verdict.moderate b { color: var(--moderate); }
+  .verdict.low b { color: var(--low); }
+  .headmetrics { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 16px; }
+  .headmetrics div span { display: block; color: var(--muted); font-size: 12px; }
+  .headmetrics div b { font-size: 18px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 16px 18px;
+  }
+  .card h2 { font-size: 14px; margin: 0 0 12px; letter-spacing: .04em; color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 5px 0; vertical-align: top; font-size: 13.5px; }
+  td.k { color: var(--muted); padding-right: 12px; }
+  td.v { text-align: right; font-variant-numeric: tabular-nums; }
+  .bars { margin-top: 6px; }
+  .bar { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 12px; }
+  .bar .lab { width: 36px; color: var(--muted); text-align: right; }
+  .bar .track { flex: 1; background: #11141a; border-radius: 4px; height: 14px; overflow: hidden; }
+  .bar .fill { height: 100%; background: var(--accent); }
+  .bar .cnt { width: 36px; color: var(--muted); }
+  .floor {
+    margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+    background: rgba(110,168,254,.08); border: 1px dashed var(--accent); font-size: 13px;
+  }
+  .curve { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .curve b { color: var(--ink); }
+  .recs { margin-top: 28px; }
+  .recs h2 { font-size: 14px; color: var(--accent); letter-spacing: .04em; }
+  .recs li { margin: 8px 0; }
+  .clean { color: var(--high); }
+  footer { margin-top: 40px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Judge Auditor — Reliability Report</h1>
+  <div class="sub">
+    Model: <b>{{ model }}</b> &nbsp;·&nbsp; Mode: <b>{{ mode }}</b>
+    &nbsp;·&nbsp; Examples: <b>{{ n_examples }}</b>
+    &nbsp;·&nbsp; Judgments: <b>{{ n_records }}</b>
+    &nbsp;·&nbsp; Parse failures: <b>{{ parse_failure_rate }}</b>
+  </div>
+
+  <div class="headline {{ level }}">
+    <div class="verdict {{ level }}">Judge reliability<b>{{ overall }}</b></div>
+    <div class="headmetrics">
+      {% for label, value in headline %}
+      <div><span>{{ label }}</span><b>{{ value }}</b></div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>SELF-CONSISTENCY</h2>
+      <table>
+        {% for k, v in consistency_rows %}<tr><td class="k">{{ k }}</td><td class="v">{{ v }}</td></tr>{% endfor %}
+      </table>
+    </div>
+
+    {% if position_rows %}
+    <div class="card">
+      <h2>POSITION BIAS</h2>
+      <table>
+        {% for k, v in position_rows %}<tr><td class="k">{{ k }}</td><td class="v">{{ v }}</td></tr>{% endfor %}
+      </table>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <h2>VERBOSITY BIAS</h2>
+      <table>
+        {% for k, v in verbosity_rows %}<tr><td class="k">{{ k }}</td><td class="v">{{ v }}</td></tr>{% endfor %}
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>SCALE ANALYSIS</h2>
+      <table>
+        {% for k, v in scale_rows %}<tr><td class="k">{{ k }}</td><td class="v">{{ v }}</td></tr>{% endfor %}
+      </table>
+      {% if histogram %}
+      <div class="bars">
+        {% for label, count, pct in histogram %}
+        <div class="bar"><span class="lab">{{ label }}</span>
+          <span class="track"><span class="fill" style="width: {{ '%.1f' % pct }}%"></span></span>
+          <span class="cnt">{{ count }}</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if pairwise_bars %}
+      <div class="bars">
+        {% for label, pct in pairwise_bars %}
+        <div class="bar"><span class="lab">{{ label }}</span>
+          <span class="track"><span class="fill" style="width: {{ '%.1f' % pct }}%"></span></span>
+          <span class="cnt">{{ '%.0f' % pct }}%</span></div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>POWER / NOISE FLOOR</h2>
+      <table>
+        {% for k, v in power_rows %}<tr><td class="k">{{ k }}</td><td class="v">{{ v }}</td></tr>{% endfor %}
+      </table>
+      <div class="floor">{{ noise_floor }}</div>
+      {% if power_curve %}
+      <div class="curve">
+        {% for n, val in power_curve %}<span>{{ n }}: <b>{{ val }}</b></span>{% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="recs">
+    <h2>RECOMMENDED ACTIONS</h2>
+    {% if recommendations %}
+    <ul>
+      {% for rec in recommendations %}<li>{{ rec }}</li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="clean">No reliability problems detected — this judge looks dependable for the audited task.</p>
+    {% endif %}
+  </div>
+
+  <footer>
+    Confidence intervals are bootstrap (ICC / kappa) or Wilson (rates). The noise floor
+    is a lower bound on detectable effects. See METHODOLOGY for statistical details.
+  </footer>
+</div>
+</body>
+</html>
