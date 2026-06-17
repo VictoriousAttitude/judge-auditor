@@ -14,6 +14,58 @@ failure modes with proper statistics:
 - **Scale compression** — is the judge really using its score range, or clustering in 2–3 bins?
 - **Statistical power** — how large must a real quality difference be before your judge can detect it? (the *noise floor*)
 
+## The judge comparison table
+
+The single most useful output: audit several judges on the same eval set and see how
+their reliability differs. This table is produced by `python examples/judge_comparison.py`
+from synthetic judges of known character (deterministic, no API key) — point the same
+machinery at real backends to compare GPT-4o / Claude / Llama / a local model.
+
+| Judge | Mode | Self-consistency | Position flip | Verbosity | Scale | Noise floor | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Reliable judge | scalar | ICC 0.86 (good) | n/a | ok | full range | 0.44 pts | HIGH |
+| Noisy judge | scalar | ICC 0.20 (poor) | n/a | ok | full range | 0.54 pts | LOW |
+| Compressed-scale judge | scalar | ICC 0.74 (moderate) | n/a | ok | compressed | 0.11 pts | MODERATE |
+| Consistent judge | pairwise | kappa 1.00 (almost perfect) | 0% | ok | ok | 13% margin | HIGH |
+| Position-biased judge | pairwise | kappa -0.07 (poor) | 100% | ok | ok | no power | LOW |
+
+Same eval set, very different trustworthiness: the position-biased judge flips its
+verdict on every example and has *no* power to detect any true win-rate margin, while
+the reliable judge resolves score differences down to ~0.44 points.
+
+## Sample report
+
+The terminal report for the position-biased judge above (`-f terminal`, abridged):
+
+```
+================================================================
+ JUDGE RELIABILITY: LOW
+================================================================
+ Model: synthetic-position    Mode: pairwise
+ Examples: 60    Judgments: 960    Parse failures: 0.0%
+
+SELF-CONSISTENCY (pairwise)
+  Fleiss' kappa:  -0.067 [-0.067, -0.067]  [poor]
+  Mean agreement: 0.500   (min 0.500, median 0.500)
+
+POSITION BIAS
+  First-position rate: 1.000 [0.996, 1.000]   (p=0.000, favors: first)
+  Flip rate:           1.000 [0.940, 1.000]   (60/60 examples)
+  Tie rate:            0%
+
+POWER / NOISE FLOOR (pairwise)
+  Effective accuracy:   0.500  (discriminability 0.000)
+  Min detectable margin at n=60: inf
+
+FLAGS
+  - Position bias toward the first-presented response (flip rate 100%).
+================================================================
+```
+
+`-f html` produces the same content as a single self-contained HTML file (embedded
+CSS, no external JS or CDN); `-f json` produces a machine-readable version with an
+actionable `recommendations` list.
+
 ## What this is **not**
 
 - Not an eval framework. It does not run your evals — use whatever you already use.
@@ -24,12 +76,10 @@ It sits one meta-level above the eval pipeline: *"I don't run your evals — I t
 
 ## Status
 
-Early development.
-
 - **Runner** (Layer 0) — done: backend-agnostic judge runner with repeated runs, position swapping, response parsing, bounded-concurrency async, checkpoint/resume. Supports pairwise and scalar modes. OpenAI / OpenAI-compatible, Anthropic, and mock backends.
 - **Analysis** (Phase 2) — done: consistency (ICC / Fleiss' kappa), position and verbosity bias, scale analysis, power / noise-floor, all with bootstrapped confidence intervals.
 - **Report + CLI** (Phase 3) — done: the `judge-audit` CLI with terminal, self-contained HTML, and JSON reports, plus an actionable recommendations engine.
-- **Validation + methodology** (Phase 4) — planned.
+- **Validation + methodology** (Phase 4) — done: end-to-end calibration / known-bias / null validation against synthetic judges, the comparison table above, and [METHODOLOGY.md](METHODOLOGY.md).
 
 ## Install (from source)
 
@@ -64,6 +114,11 @@ judge-audit report -j judgments.json -e examples.jsonl -f json
 A judge config is TOML or JSON; eval examples are JSONL or a JSON array. For pairwise
 judges set `mode = "pairwise"` and provide `response_b` on each example. Reports come in
 three formats (`-f terminal | html | json`) and can be written to a file with `-o`.
+
+Non-`mock` runs print an estimated call count and prompt for confirmation before
+spending anything. As a rough guide, auditing 50 examples at `K = 15` is ~750 judge
+calls (on the order of a few dollars with a frontier model); use `--sample` to audit a
+stratified subset and `--checkpoint` to resume an interrupted run without paying twice.
 
 ## Quickstart (library)
 
@@ -100,6 +155,13 @@ print("parse failure rate:", judgments.parse_failure_rate)
 To turn collected judgments into a reliability report in code, pass the `JudgmentSet`
 and your examples to `judge_auditor.analysis.audit.audit(...)` and render the result
 with one of the `judge_auditor.report` renderers.
+
+## Methodology
+
+Every metric — the ICC form choice, Fleiss' kappa, the position-bias binomial test,
+the bootstrap CIs, and the noise-floor derivation (including its lower-bound caveat) —
+is documented in [METHODOLOGY.md](METHODOLOGY.md), along with the tool's limitations
+and the validation that proves it recovers known effects.
 
 ## License
 

@@ -28,7 +28,7 @@ jobs:
         run: python -m pip install -e ".[dev]"
 
       - name: Lint (ruff)
-        run: ruff check judge_auditor tests
+        run: ruff check judge_auditor tests examples
 
       - name: Type-check (mypy --strict)
         run: mypy judge_auditor
@@ -42,3 +42,6 @@ jobs:
             -c examples/judge.toml \
             -e examples/examples.jsonl \
             -b mock -k 5 -f json
+
+      - name: Comparison demo (synthetic, no network)
+        run: python examples/judge_comparison.py
