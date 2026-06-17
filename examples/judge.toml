@@ -1,0 +1,11 @@
+model = "my-judge"
+mode = "scalar"
+score_min = 1.0
+score_max = 10.0
+system_prompt = "You are a strict grader. Respond only with JSON."
+prompt_template = """
+Question: {prompt}
+Response: {response}
+
+Rate the response quality from 1 to 10 and reply as JSON: {{"score": <int>}}.
+"""

@@ -26,9 +26,10 @@ It sits one meta-level above the eval pipeline: *"I don't run your evals — I t
 
 Early development.
 
-- ✅ **Runner** (Layer 0): backend-agnostic judge runner — repeated runs, position swapping, response parsing, bounded-concurrency async, checkpoint/resume. Supports pairwise and scalar modes. OpenAI / OpenAI-compatible and mock backends.
-- 🚧 **Analysis** (Phase 2): consistency, position/verbosity bias, scale analysis, power/noise-floor — in progress.
-- ⏳ **Report + CLI** (Phase 3) and **validation + methodology** (Phase 4).
+- **Runner** (Layer 0) — done: backend-agnostic judge runner with repeated runs, position swapping, response parsing, bounded-concurrency async, checkpoint/resume. Supports pairwise and scalar modes. OpenAI / OpenAI-compatible, Anthropic, and mock backends.
+- **Analysis** (Phase 2) — done: consistency (ICC / Fleiss' kappa), position and verbosity bias, scale analysis, power / noise-floor, all with bootstrapped confidence intervals.
+- **Report + CLI** (Phase 3) — done: the `judge-audit` CLI with terminal, self-contained HTML, and JSON reports, plus an actionable recommendations engine.
+- **Validation + methodology** (Phase 4) — planned.
 
 ## Install (from source)
 
@@ -39,7 +40,32 @@ python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-## Quickstart (runner)
+## Quickstart (CLI)
+
+The `judge-audit` CLI runs a full audit and emits a report. The `mock` backend needs
+no API key and makes no network calls, so you can dry-run your config and template
+wiring before spending money on a real judge.
+
+```bash
+# Dry-run against the bundled example (mock backend, no API key):
+judge-audit run -c examples/judge.toml -e examples/examples.jsonl -b mock -k 15
+
+# Audit a real judge and write a self-contained HTML report:
+export OPENAI_API_KEY=sk-...
+judge-audit run -c examples/judge.toml -e examples/examples.jsonl \
+    -b openai -k 15 -f html -o report.html
+
+# Save the raw judgments, then re-render later without re-calling the judge:
+judge-audit run -c judge.toml -e examples.jsonl -b openai \
+    --save-judgments judgments.json
+judge-audit report -j judgments.json -e examples.jsonl -f json
+```
+
+A judge config is TOML or JSON; eval examples are JSONL or a JSON array. For pairwise
+judges set `mode = "pairwise"` and provide `response_b` on each example. Reports come in
+three formats (`-f terminal | html | json`) and can be written to a file with `-o`.
+
+## Quickstart (library)
 
 Collect repeated judgments from a judge with position swapping built in. This uses the
 mock backend (no API key); swap in `OpenAIBackend` to audit a real judge.
@@ -71,8 +97,9 @@ print(len(judgments), "judgments collected")
 print("parse failure rate:", judgments.parse_failure_rate)
 ```
 
-The analysis modules (which turn collected judgments into the reliability report) are
-landing next.
+To turn collected judgments into a reliability report in code, pass the `JudgmentSet`
+and your examples to `judge_auditor.analysis.audit.audit(...)` and render the result
+with one of the `judge_auditor.report` renderers.
 
 ## License
 

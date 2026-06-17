@@ -35,3 +35,10 @@ jobs:
 
       - name: Test (pytest)
         run: pytest -q
+
+      - name: Smoke test (mock backend, no network)
+        run: |
+          judge-audit run \
+            -c examples/judge.toml \
+            -e examples/examples.jsonl \
+            -b mock -k 5 -f json
