@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/VictoriousAttitude/judge-auditor/actions/workflows/ci.yml/badge.svg)](https://github.com/VictoriousAttitude/judge-auditor/actions/workflows/ci.yml)
 
-**Before trusting any LLM evaluation, measure how much your evaluator disagrees with itself — that self-disagreement is your noise floor, and only differences above it are real.**
+**Before trusting any LLM evaluation, measure how much your evaluator disagrees with itself. That self-disagreement is your noise floor, and only differences above it are real.**
 
 `judge-auditor` is a reliability diagnostic for LLM-as-judge pipelines. Point it at
 *your* judge (model + rubric + eval examples) and it produces a report of the judge's
