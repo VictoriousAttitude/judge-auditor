@@ -76,6 +76,8 @@ It sits one meta-level above the eval pipeline: *"I don't run your evals — I t
 
 ## Status
 
+**v0.1, pre-1.0.** The analysis core is tested and cross-validated against reference implementations, but the project is young: install is from source (not yet on PyPI), the public API may change before 1.0, and the OpenAI / Anthropic backends are covered by mocked and failure-injection tests rather than a live-API integration test. Use it, file issues — just pin a commit if you depend on it.
+
 - **Runner** (Layer 0) — done: backend-agnostic judge runner with repeated runs, position swapping, response parsing, bounded-concurrency async, checkpoint/resume. Supports pairwise and scalar modes. OpenAI / OpenAI-compatible, Anthropic, and mock backends.
 - **Analysis** (Phase 2) — done: consistency (ICC / Fleiss' kappa), position and verbosity bias, scale analysis, power / noise-floor, all with bootstrapped confidence intervals.
 - **Report + CLI** (Phase 3) — done: the `judge-audit` CLI with terminal, self-contained HTML, and JSON reports, plus an actionable recommendations engine.
