@@ -1,0 +1,127 @@
+{
+  "model": "demo-pairwise",
+  "mode": "pairwise",
+  "n_examples": 40,
+  "n_records": 640,
+  "parse_failure_rate": 0.0,
+  "consistency": {
+    "mode": "pairwise",
+    "n_examples": 40,
+    "runs_per_example": 16,
+    "icc_oneway": null,
+    "icc_twoway": null,
+    "icc_interpretation": null,
+    "mean_within_sd": null,
+    "fleiss_kappa": {
+      "point": 0.55,
+      "low": 0.45,
+      "high": 0.64,
+      "confidence": 0.95
+    },
+    "kappa_interpretation": "moderate",
+    "mean_agreement": 0.78,
+    "min_agreement": 0.5,
+    "median_agreement": 0.81
+  },
+  "verbosity": {
+    "mode": "pairwise",
+    "n_examples": 40,
+    "threshold": 0.3,
+    "flagged": false,
+    "spearman_rho": null,
+    "spearman_p": null,
+    "partial_rho": null,
+    "longer_response_win_rate": 0.52,
+    "length_winrate_rho": 0.1,
+    "length_winrate_p": 0.4
+  },
+  "scale": {
+    "mode": "pairwise",
+    "n": 640,
+    "score_min": null,
+    "score_max": null,
+    "num_bins": null,
+    "bin_values": [],
+    "histogram": [],
+    "distinct_values_used": null,
+    "effective_range": null,
+    "max_window_fraction": null,
+    "compressed": false,
+    "compressed_values": [],
+    "n_decisions": 600,
+    "win_rate_a": 0.5,
+    "win_rate_b": 0.44,
+    "tie_rate": 0.06,
+    "indistinguishable": false
+  },
+  "power": {
+    "mode": "pairwise",
+    "n_examples": 40,
+    "alpha": 0.05,
+    "power": 0.8,
+    "target_effect": null,
+    "sigma_w": null,
+    "mde": null,
+    "power_curve": [],
+    "required_n": null,
+    "effective_accuracy": 0.78,
+    "discriminability": 0.56,
+    "mde_winrate": 0.18,
+    "winrate_power_curve": [
+      [
+        10,
+        0.4
+      ],
+      [
+        20,
+        0.28
+      ],
+      [
+        50,
+        0.18
+      ],
+      [
+        100,
+        0.13
+      ]
+    ],
+    "required_pairs": null
+  },
+  "position": {
+    "n_decisions": 600,
+    "first_position_rate": {
+      "point": 0.57,
+      "low": 0.53,
+      "high": 0.61,
+      "confidence": 0.95
+    },
+    "first_preference_p_value": 0.001,
+    "favored_position": "first",
+    "n_examples": 40,
+    "n_flipped": 6,
+    "flip_rate": {
+      "point": 0.15,
+      "low": 0.07,
+      "high": 0.28,
+      "confidence": 0.95
+    },
+    "flipped_examples": [
+      "ex3",
+      "ex7",
+      "ex11",
+      "ex18",
+      "ex25",
+      "ex33"
+    ],
+    "tie_rate": 0.06
+  },
+  "overall": "MODERATE",
+  "notes": [
+    "Position bias toward the first-presented response (flip rate 15%)."
+  ],
+  "recommendations": [
+    "Self-consistency is moderate (kappa=0.55). The judge disagrees with itself across runs; average more runs per pair or use a stronger judge model before trusting verdicts.",
+    "Position bias toward the first-presented response (flip rate 15%). Consider (a) best-of-N with position swapping \u2014 run both orderings and count only the agreements; or (b) switching to scalar mode, which avoids order effects.",
+    "Noise floor: the minimum reliably detectable win-rate margin is 0.180 at n=40. Treat smaller margins as within judge noise."
+  ]
+}

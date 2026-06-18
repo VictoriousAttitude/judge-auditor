@@ -1,0 +1,127 @@
+{
+  "model": "demo-scalar",
+  "mode": "scalar",
+  "n_examples": 40,
+  "n_records": 800,
+  "parse_failure_rate": 0.0,
+  "consistency": {
+    "mode": "scalar",
+    "n_examples": 40,
+    "runs_per_example": 20,
+    "icc_oneway": {
+      "point": 0.82,
+      "low": 0.74,
+      "high": 0.88,
+      "confidence": 0.95
+    },
+    "icc_twoway": {
+      "point": 0.81,
+      "low": 0.73,
+      "high": 0.87,
+      "confidence": 0.95
+    },
+    "icc_interpretation": "good",
+    "mean_within_sd": 0.65,
+    "fleiss_kappa": null,
+    "kappa_interpretation": null,
+    "mean_agreement": null,
+    "min_agreement": null,
+    "median_agreement": null
+  },
+  "verbosity": {
+    "mode": "scalar",
+    "n_examples": 40,
+    "threshold": 0.3,
+    "flagged": false,
+    "spearman_rho": 0.05,
+    "spearman_p": 0.62,
+    "partial_rho": 0.02,
+    "longer_response_win_rate": null,
+    "length_winrate_rho": null,
+    "length_winrate_p": null
+  },
+  "scale": {
+    "mode": "scalar",
+    "n": 800,
+    "score_min": 1.0,
+    "score_max": 10.0,
+    "num_bins": 10,
+    "bin_values": [
+      1.0,
+      2.0,
+      3.0,
+      4.0,
+      5.0,
+      6.0,
+      7.0,
+      8.0,
+      9.0,
+      10.0
+    ],
+    "histogram": [
+      5,
+      10,
+      20,
+      40,
+      80,
+      140,
+      200,
+      160,
+      100,
+      45
+    ],
+    "distinct_values_used": 10,
+    "effective_range": 0.86,
+    "max_window_fraction": 0.42,
+    "compressed": false,
+    "compressed_values": [],
+    "n_decisions": null,
+    "win_rate_a": null,
+    "win_rate_b": null,
+    "tie_rate": null,
+    "indistinguishable": false
+  },
+  "power": {
+    "mode": "scalar",
+    "n_examples": 40,
+    "alpha": 0.05,
+    "power": 0.8,
+    "target_effect": null,
+    "sigma_w": 0.65,
+    "mde": 0.44,
+    "power_curve": [
+      [
+        10,
+        0.88
+      ],
+      [
+        20,
+        0.62
+      ],
+      [
+        30,
+        0.51
+      ],
+      [
+        50,
+        0.39
+      ],
+      [
+        100,
+        0.28
+      ]
+    ],
+    "required_n": null,
+    "effective_accuracy": null,
+    "discriminability": null,
+    "mde_winrate": null,
+    "winrate_power_curve": [],
+    "required_pairs": null
+  },
+  "position": null,
+  "overall": "HIGH",
+  "notes": [],
+  "recommendations": [
+    "Noise floor: the minimum reliably detectable score difference is 0.44 points at n=40. Treat smaller A/B differences as within judge noise \u2014 do not ship decisions based on them."
+  ]
+}

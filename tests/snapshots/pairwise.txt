@@ -1,0 +1,31 @@
+================================================================
+ JUDGE RELIABILITY: MODERATE
+================================================================
+ Model: demo-pairwise    Mode: pairwise
+ Examples: 40    Judgments: 640    Parse failures: 0.0%
+
+SELF-CONSISTENCY (pairwise)
+  Fleiss' kappa:  0.550 [0.450, 0.640]  [moderate]
+  Mean agreement: 0.780   (min 0.500, median 0.810)
+
+POSITION BIAS
+  First-position rate: 0.570 [0.530, 0.610]   (p=0.001, favors: first)
+  Flip rate:           0.150 [0.070, 0.280]   (6/40 examples)
+  Tie rate:            6%
+
+VERBOSITY BIAS
+  Longer-response win rate: 0.520
+  Length~win Spearman:      0.100   flagged=False
+
+SCALE ANALYSIS (pairwise)
+  Win A / Win B / Tie: 50% / 44% / 6%
+  Indistinguishable:   False
+
+POWER / NOISE FLOOR (pairwise)
+  Effective accuracy:   0.780  (discriminability 0.560)
+  Min detectable margin at n=40: 0.180
+  Power curve: n=10:0.400  n=20:0.280  n=50:0.180  n=100:0.130
+
+FLAGS
+  - Position bias toward the first-presented response (flip rate 15%).
+================================================================

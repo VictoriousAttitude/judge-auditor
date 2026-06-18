@@ -1,0 +1,27 @@
+================================================================
+ JUDGE RELIABILITY: HIGH
+================================================================
+ Model: demo-scalar    Mode: scalar
+ Examples: 40    Judgments: 800    Parse failures: 0.0%
+
+SELF-CONSISTENCY (scalar)
+  ICC(1,1):       0.820 [0.740, 0.880]  [good]
+  ICC(2,1):       0.810 [0.730, 0.870]
+  Within-ex SD:   0.650
+
+VERBOSITY BIAS
+  Score~length Spearman: 0.050   (p=0.620)  flagged=False
+  Partial (vs quality):  0.020
+
+SCALE ANALYSIS
+  Values used:      10/10
+  Effective range:  86%
+  Densest window:   42%   compressed=False
+
+POWER / NOISE FLOOR (scalar)
+  Judge noise (sigma_w): 0.650
+  MDE at n=40: 0.440 points  (lower bound — judge noise only)
+  Power curve: n=10:0.88  n=20:0.62  n=30:0.51  n=50:0.39  n=100:0.28
+
+No bias or scale problems flagged.
+================================================================
