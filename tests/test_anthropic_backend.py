@@ -91,6 +91,61 @@ async def test_retries_on_503_then_succeeds(config, monkeypatch):
 
 
 @respx.mock
+async def test_persistent_retryable_status_exhausts_then_raises(config, monkeypatch):
+    monkeypatch.setattr("asyncio.sleep", _noop_sleep)
+    route = respx.post(URL)
+    route.mock(return_value=httpx.Response(503))
+    backend = AnthropicBackend(api_key="test", max_retries=2)
+    with pytest.raises(httpx.HTTPStatusError):
+        await backend.call([{"role": "user", "content": "hi"}], config)
+    assert route.call_count == 3
+    await backend.aclose()
+
+
+@respx.mock
+async def test_non_retryable_4xx_raises_immediately(config):
+    route = respx.post(URL)
+    route.mock(return_value=httpx.Response(400))
+    backend = AnthropicBackend(api_key="test", max_retries=5)
+    with pytest.raises(httpx.HTTPStatusError):
+        await backend.call([{"role": "user", "content": "hi"}], config)
+    assert route.call_count == 1
+    await backend.aclose()
+
+
+@respx.mock
+async def test_network_errors_raise_runtimeerror_after_all_attempts(config, monkeypatch):
+    monkeypatch.setattr("asyncio.sleep", _noop_sleep)
+    route = respx.post(URL)
+    route.mock(side_effect=httpx.ConnectTimeout("boom"))
+    backend = AnthropicBackend(api_key="test", max_retries=2)
+    with pytest.raises(RuntimeError, match="failed after 3 attempts"):
+        await backend.call([{"role": "user", "content": "hi"}], config)
+    assert route.call_count == 3
+    await backend.aclose()
+
+
+@respx.mock
+async def test_retry_after_header_is_honored_over_jitter(config, monkeypatch):
+    slept: list[float] = []
+
+    async def _record_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr("asyncio.sleep", _record_sleep)
+    route = respx.post(URL)
+    route.side_effect = [
+        httpx.Response(429, headers={"retry-after": "1.5"}),
+        _message('{"score": 9}'),
+    ]
+    backend = AnthropicBackend(api_key="test", max_retries=3)
+    resp = await backend.call([{"role": "user", "content": "hi"}], config)
+    assert resp.text == '{"score": 9}'
+    assert slept == [1.5]
+    await backend.aclose()
+
+
+@respx.mock
 async def test_sends_version_and_key_headers(config):
     captured: dict = {}
 

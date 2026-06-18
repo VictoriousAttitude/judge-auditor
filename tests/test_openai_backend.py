@@ -90,3 +90,59 @@ async def test_includes_response_format_when_set(monkeypatch):
 
 async def _noop_sleep(_seconds: float) -> None:
     return None
+
+
+@respx.mock
+async def test_persistent_retryable_status_exhausts_then_raises(config, monkeypatch):
+    monkeypatch.setattr("asyncio.sleep", _noop_sleep)
+    route = respx.post(URL)
+    route.mock(return_value=httpx.Response(500))
+    backend = OpenAIBackend(api_key="test", max_retries=2)
+    with pytest.raises(httpx.HTTPStatusError):
+        await backend.call([{"role": "user", "content": "hi"}], config)
+    # max_retries backoffs, then a final attempt that raises: max_retries + 1 calls.
+    assert route.call_count == 3
+    await backend.aclose()
+
+
+@respx.mock
+async def test_non_retryable_4xx_raises_immediately(config):
+    route = respx.post(URL)
+    route.mock(return_value=httpx.Response(401))
+    backend = OpenAIBackend(api_key="test", max_retries=5)
+    with pytest.raises(httpx.HTTPStatusError):
+        await backend.call([{"role": "user", "content": "hi"}], config)
+    assert route.call_count == 1  # 401 is not retryable: no second attempt
+    await backend.aclose()
+
+
+@respx.mock
+async def test_network_errors_raise_runtimeerror_after_all_attempts(config, monkeypatch):
+    monkeypatch.setattr("asyncio.sleep", _noop_sleep)
+    route = respx.post(URL)
+    route.mock(side_effect=httpx.ConnectError("boom"))
+    backend = OpenAIBackend(api_key="test", max_retries=2)
+    with pytest.raises(RuntimeError, match="failed after 3 attempts"):
+        await backend.call([{"role": "user", "content": "hi"}], config)
+    assert route.call_count == 3
+    await backend.aclose()
+
+
+@respx.mock
+async def test_retry_after_header_is_honored_over_jitter(config, monkeypatch):
+    slept: list[float] = []
+
+    async def _record_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr("asyncio.sleep", _record_sleep)
+    route = respx.post(URL)
+    route.side_effect = [
+        httpx.Response(429, headers={"retry-after": "2.5"}),
+        _completion('{"score": 9}'),
+    ]
+    backend = OpenAIBackend(api_key="test", max_retries=3)
+    resp = await backend.call([{"role": "user", "content": "hi"}], config)
+    assert resp.text == '{"score": 9}'
+    assert slept == [2.5]  # exact server-specified wait, not the jittered backoff
+    await backend.aclose()
