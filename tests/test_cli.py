@@ -141,3 +141,57 @@ def test_run_cost_prompt_abort(tmp_path, monkeypatch):
     )
     assert result.exit_code == 1
     assert "Aborted" in result.output
+
+
+# --- error paths ----------------------------------------------------------------
+
+
+def test_run_missing_config_file_is_usage_error(tmp_path):
+    exs = scalar_examples(tmp_path)
+    result = runner.invoke(
+        app, ["run", "-c", str(tmp_path / "nope.toml"), "-e", str(exs), "-b", "mock"]
+    )
+    assert result.exit_code == 2  # click validates exists=True before the body runs
+
+
+def test_run_missing_examples_file_is_usage_error(tmp_path):
+    cfg = scalar_config(tmp_path)
+    result = runner.invoke(
+        app, ["run", "-c", str(cfg), "-e", str(tmp_path / "nope.jsonl"), "-b", "mock"]
+    )
+    assert result.exit_code == 2
+
+
+def test_run_unknown_format_is_usage_error(tmp_path):
+    cfg, exs = scalar_config(tmp_path), scalar_examples(tmp_path)
+    result = runner.invoke(
+        app,
+        ["run", "-c", str(cfg), "-e", str(exs), "-b", "mock", "-k", "5", "-f", "bogus"],
+    )
+    assert result.exit_code == 2
+    assert "unknown format" in result.output
+
+
+def test_run_unknown_backend_is_usage_error(tmp_path):
+    cfg, exs = scalar_config(tmp_path), scalar_examples(tmp_path)
+    result = runner.invoke(
+        app, ["run", "-c", str(cfg), "-e", str(exs), "-b", "bogus", "-k", "5"]
+    )
+    assert result.exit_code == 2
+    assert "unknown backend" in result.output
+
+
+def test_run_malformed_toml_config_fails(tmp_path):
+    bad = write(tmp_path / "judge.toml", "model = \nmode = ")  # not valid TOML
+    exs = scalar_examples(tmp_path)
+    result = runner.invoke(app, ["run", "-c", str(bad), "-e", str(exs), "-b", "mock"])
+    assert result.exit_code != 0
+
+
+def test_run_example_missing_required_field_fails(tmp_path):
+    cfg = scalar_config(tmp_path)
+    # Row without the required "prompt" key.
+    bad = write(tmp_path / "ex.jsonl", json.dumps({"id": "ex0", "response_a": "x"}))
+    result = runner.invoke(app, ["run", "-c", str(cfg), "-e", str(bad), "-b", "mock"])
+    assert result.exit_code != 0
+    assert isinstance(result.exception, KeyError)
