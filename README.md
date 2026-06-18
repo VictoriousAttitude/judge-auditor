@@ -80,6 +80,7 @@ It sits one meta-level above the eval pipeline: *"I don't run your evals — I t
 - **Analysis** (Phase 2) — done: consistency (ICC / Fleiss' kappa), position and verbosity bias, scale analysis, power / noise-floor, all with bootstrapped confidence intervals.
 - **Report + CLI** (Phase 3) — done: the `judge-audit` CLI with terminal, self-contained HTML, and JSON reports, plus an actionable recommendations engine.
 - **Validation + methodology** (Phase 4) — done: end-to-end calibration / known-bias / null validation against synthetic judges, the comparison table above, and [METHODOLOGY.md](METHODOLOGY.md).
+- **Testing** — a reliability tool has to be reliable itself, so the estimators carry their own evidence: the hand-rolled statistics are cross-validated against `statsmodels` / `pingouin` and a published worked example (Shrout & Fleiss 1979); their mathematical invariants are fuzzed with property-based tests; the detectors are checked by Monte-Carlo calibration (point-estimate unbiasedness, confidence-interval coverage, and false-alarm / sensitivity rates); backend retry and error handling are exercised by failure injection; the terminal / HTML / JSON reports are pinned by golden snapshots; and CI enforces a coverage floor.
 
 ## Install (from source)
 
