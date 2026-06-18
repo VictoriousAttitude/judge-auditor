@@ -33,8 +33,8 @@ jobs:
       - name: Type-check (mypy --strict)
         run: mypy judge_auditor
 
-      - name: Test (pytest)
-        run: pytest -q
+      - name: Test (pytest, with coverage gate)
+        run: pytest -q --cov=judge_auditor --cov-report=term-missing --cov-fail-under=90
 
       - name: Reference cross-validation (vs statsmodels / pingouin)
         run: |
