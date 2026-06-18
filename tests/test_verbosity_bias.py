@@ -22,12 +22,29 @@ def scalar_case(scores_by_length: dict[int, float], runs: int = 3):
 
 
 def test_scalar_length_correlated_scores_flag():
-    # Score increases monotonically with length => Spearman rho ~ 1.
-    data = {5: 2.0, 10: 4.0, 20: 6.0, 40: 8.0, 80: 9.0}
+    # Score increases monotonically with length => Spearman rho ~ 1, and with
+    # enough examples (n >= min_n) the correlation is significant => flagged.
+    data = {
+        5: 1.0, 10: 2.0, 15: 2.5, 20: 3.0, 30: 4.0, 40: 5.0,
+        55: 6.0, 70: 6.5, 90: 7.5, 110: 8.0, 140: 9.0, 180: 10.0,
+    }
     js, examples = scalar_case(data)
     res = verbosity_bias(js, examples)
     assert res.spearman_rho is not None and res.spearman_rho > 0.95
+    assert res.spearman_p is not None and res.spearman_p < 0.05
     assert res.flagged
+
+
+def test_scalar_small_n_large_rho_not_flagged():
+    # A sizeable |rho| (~0.5 > threshold) on only a handful of examples is NOT
+    # statistically significant and falls below min_n: the flag must stay off.
+    # This is the small-n false positive the significance/min-n gate fixes.
+    data = {5: 3.0, 12: 7.0, 30: 4.0, 60: 8.0, 120: 6.0}
+    js, examples = scalar_case(data)
+    res = verbosity_bias(js, examples)
+    assert res.n_examples == 5
+    assert res.spearman_rho is not None and abs(res.spearman_rho) > res.threshold
+    assert not res.flagged
 
 
 def test_scalar_length_independent_scores_not_flagged():
@@ -95,3 +112,80 @@ def test_word_count():
     assert word_count("one two three") == 3
     assert word_count("  spaced   out  ") == 2
     assert word_count("") == 0
+
+
+# --- within-quality-stratum interaction (feature (a)) ---------------------------
+
+
+def stratified_case(tiers, runs: int = 5):
+    """Build a scalar set: each tier = (quality, short_score, long_score) with 4
+    short (len 10-13) + 4 long (len 80-83) examples."""
+    examples, records = [], []
+    i = 0
+    for quality, short_score, long_score in tiers:
+        for length, score in (
+            *[(10 + k, short_score) for k in range(4)],
+            *[(80 + k, long_score) for k in range(4)],
+        ):
+            eid = f"e{i}"
+            i += 1
+            examples.append(
+                EvalExample(id=eid, prompt="q", response_a=words(length), quality_label=quality)
+            )
+            for j in range(runs):
+                records.append(JudgmentRecord(eid, j, 0, None, str(score), True, score=score))
+    return JudgmentSet(JudgeMode.SCALAR, "m", records), examples
+
+
+def test_within_stratum_interaction_caught_when_global_misses_it():
+    # Length penalty lives ONLY in the top-quality tier (correct-but-verbose docked
+    # ~5 pts); other tiers have no length effect. This mimics the live Sonnet finding:
+    # the global correlation washes it out, but the stratified check catches it.
+    tiers = [(9.0, 10.0, 5.0), (7.0, 7.0, 7.0), (5.0, 5.0, 5.0), (2.0, 2.0, 2.0)]
+    js, examples = stratified_case(tiers)
+    res = verbosity_bias(js, examples)
+
+    assert not res.flagged  # the global score~length correlation misses it
+    assert res.stratified_flagged  # the within-stratum check catches it
+    assert res.strata is not None and len(res.strata) == 1  # only the q=9 tier has signal
+    top = res.strata[0]
+    assert top.quality == 9.0
+    assert top.flagged
+    assert top.score_gap < -3.0  # longer responses scored markedly lower
+    assert top.spearman_rho < -0.5
+
+
+def test_stratified_no_length_effect_not_flagged():
+    # Discrete quality, lengths vary, but score depends only on quality (constant
+    # within each tier) => no within-stratum length signal => not flagged.
+    tiers = [(9.0, 9.0, 9.0), (5.0, 5.0, 5.0), (2.0, 2.0, 2.0)]
+    js, examples = stratified_case(tiers)
+    res = verbosity_bias(js, examples)
+    assert not res.stratified_flagged
+    assert res.strata is None or all(not s.flagged for s in res.strata)
+
+
+def test_continuous_quality_label_skips_stratification():
+    # Many distinct quality values (continuous) => no discrete strata to hold quality
+    # fixed => stratified analysis stays off; rely on the global/partial correlation.
+    rng = np.random.default_rng(0)
+    examples, records = [], []
+    for i in range(40):
+        eid = f"c{i}"
+        examples.append(
+            EvalExample(id=eid, prompt="q", response_a=words(10 + i), quality_label=float(i))
+        )
+        score = i / 4.0 + rng.normal(0, 0.3)
+        for j in range(2):
+            records.append(JudgmentRecord(eid, j, 0, None, str(score), True, score=score))
+    js = JudgmentSet(JudgeMode.SCALAR, "m", records)
+    res = verbosity_bias(js, examples)
+    assert res.strata is None
+    assert not res.stratified_flagged
+
+
+def test_no_quality_label_skips_stratification():
+    js, examples = scalar_case({5: 2.0, 10: 4.0, 20: 6.0, 40: 8.0})
+    res = verbosity_bias(js, examples)  # examples carry no quality_label
+    assert res.strata is None
+    assert not res.stratified_flagged
