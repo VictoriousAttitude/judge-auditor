@@ -91,9 +91,21 @@ def audit(
     notes: list[str] = []
 
     if verb.flagged:
+        v_rho = verb.spearman_rho if verb.mode is JudgeMode.SCALAR else verb.length_winrate_rho
+        v_p = verb.spearman_p if verb.mode is JudgeMode.SCALAR else verb.length_winrate_p
         notes.append(
-            f"Verbosity bias: score/length Spearman rho={verb.spearman_rho:.2f} "
-            f"(|rho| > {verb.threshold})."
+            f"Verbosity bias: length Spearman rho={v_rho:.2f} "
+            f"(p={v_p:.3f}, n={verb.n_examples}; flagged at |rho|>{verb.threshold}, "
+            f"p<{verb.p_threshold})."
+        )
+        level = _downgrade(level, "MODERATE")
+    if verb.stratified_flagged and verb.strata is not None:
+        worst = max(verb.strata, key=lambda s: abs(s.score_gap))
+        notes.append(
+            f"Verbosity bias within quality={worst.quality:g}: longer responses score "
+            f"{worst.score_gap:+.1f} pts vs shorter (rho={worst.spearman_rho:.2f}, "
+            f"p={worst.spearman_p:.3f}, n={worst.n}) — an interaction the global "
+            "correlation masks."
         )
         level = _downgrade(level, "MODERATE")
     if scale.mode is JudgeMode.SCALAR and scale.compressed:

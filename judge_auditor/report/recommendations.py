@@ -52,18 +52,26 @@ def _position_rec(report: ReliabilityReport) -> str | None:
 
 def _verbosity_rec(report: ReliabilityReport) -> str | None:
     v = report.verbosity
-    if not v.flagged:
-        return None
-    if v.mode is JudgeMode.SCALAR and v.spearman_rho is not None:
+    if v.flagged:
+        if v.mode is JudgeMode.SCALAR and v.spearman_rho is not None:
+            return (
+                f"Verbosity correlation rho={v.spearman_rho:.2f}: the judge rewards length. "
+                "Add an explicit 'ignore response length' instruction to the rubric, or "
+                "length-normalize responses before scoring."
+            )
         return (
-            f"Verbosity correlation rho={v.spearman_rho:.2f}: the judge rewards length. "
-            "Add an explicit 'ignore response length' instruction to the rubric, or "
-            "length-normalize responses before scoring."
+            "The longer response wins disproportionately often. Add an 'ignore response "
+            "length' instruction to the rubric, or control for length before comparing."
         )
-    return (
-        "The longer response wins disproportionately often. Add an 'ignore response "
-        "length' instruction to the rubric, or control for length before comparing."
-    )
+    if v.stratified_flagged and v.strata:
+        worst = max(v.strata, key=lambda s: abs(s.score_gap))
+        return (
+            f"Among equal-quality answers (quality={worst.quality:g}), the judge scores "
+            f"longer responses {worst.score_gap:+.1f} pts differently — a length effect "
+            "hidden in the overall correlation. Add an 'ignore response length' "
+            "instruction to the rubric, or length-normalize before scoring."
+        )
+    return None
 
 
 def _scale_rec(report: ReliabilityReport) -> str | None:

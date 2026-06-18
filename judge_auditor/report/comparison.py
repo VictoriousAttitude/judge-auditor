@@ -69,7 +69,7 @@ def comparison_row(label: str, r: ReliabilityReport) -> list[str]:
         r.mode.value,
         _consistency_cell(r),
         _flip_cell(r),
-        "flagged" if r.verbosity.flagged else "ok",
+        "flagged" if (r.verbosity.flagged or r.verbosity.stratified_flagged) else "ok",
         _scale_cell(r),
         _noise_floor_cell(r),
         r.overall,

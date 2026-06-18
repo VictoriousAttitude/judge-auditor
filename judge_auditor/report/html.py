@@ -95,6 +95,14 @@ def _verbosity_rows(r: ReliabilityReport) -> list[tuple[str, str]]:
         ]
         if v.partial_rho is not None:
             rows.append(("Partial (controlling quality)", _num(v.partial_rho)))
+        if v.strata is not None:
+            worst = max(v.strata, key=lambda s: abs(s.score_gap))
+            verdict = "flagged" if v.stratified_flagged else "ok"
+            rows.append((
+                "Within-quality length effect",
+                f"{verdict} (worst q={worst.quality:g}: {worst.score_gap:+.1f} pts, "
+                f"rho={_num(worst.spearman_rho)})",
+            ))
         return rows
     return [
         ("Longer-response win rate", _num(v.longer_response_win_rate)),

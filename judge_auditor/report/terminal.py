@@ -82,6 +82,18 @@ def _verbosity_lines(r: ReliabilityReport) -> list[str]:
         ]
         if v.partial_rho is not None:
             lines.append(f"  Partial (vs quality):  {_num(v.partial_rho)}")
+        if v.strata is not None:
+            lines.append(
+                f"  Within-quality strata: stratified_flagged={v.stratified_flagged}"
+                f"  (max |rho|={_num(v.max_abs_stratum_rho, '.2f')})"
+            )
+            for se in v.strata:
+                mark = "  <-- flagged" if se.flagged else ""
+                lines.append(
+                    f"    q={se.quality:g}: gap={se.score_gap:+.2f} pts  "
+                    f"rho={_num(se.spearman_rho, '.2f')} "
+                    f"(p={_num(se.spearman_p, '.3f')}, n={se.n}){mark}"
+                )
         return lines
     return [
         "",

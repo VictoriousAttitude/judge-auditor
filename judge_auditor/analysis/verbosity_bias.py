@@ -8,11 +8,21 @@ proxy by default; callers may pass precomputed lengths for true token counts).
   report the **partial** Spearman correlation controlling for quality — this
   separates "longer answers are genuinely better in this dataset" from "the judge
   prefers length regardless of quality."
+* Scalar (interaction) -> when ``quality_label`` is *discrete* (a graded rubric,
+  e.g. 1-5), we additionally split examples into quality strata and measure the
+  score~length effect *within* each stratum, where quality is held ~constant. This
+  catches a length effect that lives in a single quality band — e.g. the judge docks
+  verbose-but-correct answers while ignoring length on wrong ones — which a single
+  global (or even partial) correlation averages away to nearly nothing.
 * Pairwise -> the win rate of the *longer* response, plus the Spearman correlation
   between the length difference (len_A - len_B) and the win margin (P(A) - P(B)).
 
-|rho| > threshold (default 0.3) flags the judge as potentially length-biased; the
-correlation is always reported regardless of the flag.
+The judge is flagged as potentially length-biased only when the correlation is
+**both** practically large (|rho| > threshold, default 0.3) **and** statistically
+significant (p < p_threshold, default 0.05) on a minimum sample (n >= min_n,
+default 8). This guards against a large-but-noisy correlation on a handful of
+examples spuriously tripping the flag. The correlation and its p-value are always
+reported regardless of the flag.
 """
 
 from __future__ import annotations
@@ -27,16 +37,43 @@ from ..records import JudgmentSet
 
 
 @dataclass
+class StratumLengthEffect:
+    """Score~length effect within one (near-)constant-quality stratum.
+
+    Quality is held fixed inside a stratum, so any score difference between shorter
+    and longer responses is a pure style/verbosity effect. ``score_gap`` is the mean
+    score of the longer half minus that of the shorter half (negative == the judge
+    penalises length here).
+    """
+
+    quality: float
+    n: int
+    spearman_rho: float
+    spearman_p: float
+    mean_short: float
+    mean_long: float
+    score_gap: float
+    flagged: bool
+
+
+@dataclass
 class VerbosityBiasResult:
     mode: JudgeMode
     n_examples: int
     threshold: float = 0.3
+    p_threshold: float = 0.05
+    min_n: int = 8
     flagged: bool = False
 
     # Scalar.
     spearman_rho: float | None = None
     spearman_p: float | None = None
     partial_rho: float | None = None  # score~length controlling for quality_label
+
+    # Scalar interaction: per-quality-stratum length effect (discrete labels only).
+    strata: list[StratumLengthEffect] | None = None
+    stratified_flagged: bool = False
+    max_abs_stratum_rho: float | None = None
 
     # Pairwise.
     longer_response_win_rate: float | None = None
@@ -74,12 +111,92 @@ def _partial_spearman(x: list[float], y: list[float], z: list[float]) -> float:
     return float((rxy - rxz * ryz) / denom)
 
 
+def _is_flagged(
+    rho: float,
+    p: float,
+    n: int,
+    *,
+    threshold: float,
+    p_threshold: float,
+    min_n: int,
+) -> bool:
+    """Flag only a large (|rho| > threshold) AND significant (p < p_threshold)
+    correlation on at least ``min_n`` examples, so a noisy spike on a few points
+    no longer trips the flag."""
+    return (
+        n >= min_n
+        and not np.isnan(rho)
+        and not np.isnan(p)
+        and abs(rho) > threshold
+        and p < p_threshold
+    )
+
+
+def _stratify_length_effect(
+    scores: list[float],
+    lens: list[float],
+    quals: list[float],
+    *,
+    max_strata: int,
+    min_stratum_n: int,
+    threshold: float,
+    p_threshold: float,
+) -> list[StratumLengthEffect]:
+    """Measure the score~length effect within each discrete quality stratum.
+
+    Only meaningful when ``quality_label`` is discrete (so quality is ~constant
+    inside a stratum). For continuous labels — more than ``max_strata`` distinct
+    values — we return nothing and leave verbosity to the global/partial correlation,
+    because coarse quantile bins would not hold quality fixed.
+    """
+    distinct = sorted(set(quals))
+    if len(distinct) < 2 or len(distinct) > max_strata:
+        return []
+    out: list[StratumLengthEffect] = []
+    for q in distinct:
+        idx = [i for i, v in enumerate(quals) if v == q]
+        if len(idx) < min_stratum_n:
+            continue
+        s = [scores[i] for i in idx]
+        ln = [lens[i] for i in idx]
+        rho, p = _spearman(s, ln)
+        if np.isnan(rho):
+            continue  # length or score constant within the stratum: no signal
+        med = float(np.median(ln))
+        short = [s[k] for k in range(len(ln)) if ln[k] < med]
+        long = [s[k] for k in range(len(ln)) if ln[k] >= med]
+        if not short or not long:  # median sat at an extreme; split the other way
+            short = [s[k] for k in range(len(ln)) if ln[k] <= med]
+            long = [s[k] for k in range(len(ln)) if ln[k] > med]
+        if not short or not long:
+            continue
+        mean_short = float(np.mean(short))
+        mean_long = float(np.mean(long))
+        out.append(
+            StratumLengthEffect(
+                quality=float(q),
+                n=len(idx),
+                spearman_rho=rho,
+                spearman_p=p,
+                mean_short=mean_short,
+                mean_long=mean_long,
+                score_gap=mean_long - mean_short,
+                flagged=abs(rho) > threshold and p < p_threshold,
+            )
+        )
+    return out
+
+
 def verbosity_bias(
     js: JudgmentSet,
     examples: list[EvalExample],
     *,
     lengths: dict[str, int] | None = None,
     threshold: float = 0.3,
+    p_threshold: float = 0.05,
+    min_n: int = 8,
+    max_strata: int = 6,
+    min_stratum_n: int = 8,
 ) -> VerbosityBiasResult:
     """Compute verbosity-bias statistics.
 
@@ -110,16 +227,44 @@ def verbosity_bias(
 
         rho, p = _spearman(scores, lens)
         partial = None
+        strata: list[StratumLengthEffect] | None = None
+        stratified_flagged = False
+        max_abs_stratum_rho: float | None = None
         if scores and not any(np.isnan(quals)):
             partial = _partial_spearman(scores, lens, quals)
+            found = _stratify_length_effect(
+                scores,
+                lens,
+                quals,
+                max_strata=max_strata,
+                min_stratum_n=min_stratum_n,
+                threshold=threshold,
+                p_threshold=p_threshold,
+            )
+            if found:
+                strata = found
+                stratified_flagged = any(se.flagged for se in found)
+                max_abs_stratum_rho = max(abs(se.spearman_rho) for se in found)
         return VerbosityBiasResult(
             mode=js.mode,
             n_examples=len(scores),
             threshold=threshold,
-            flagged=(not np.isnan(rho)) and abs(rho) > threshold,
+            p_threshold=p_threshold,
+            min_n=min_n,
+            flagged=_is_flagged(
+                rho,
+                p,
+                len(scores),
+                threshold=threshold,
+                p_threshold=p_threshold,
+                min_n=min_n,
+            ),
             spearman_rho=rho,
             spearman_p=p,
             partial_rho=partial,
+            strata=strata,
+            stratified_flagged=stratified_flagged,
+            max_abs_stratum_rho=max_abs_stratum_rho,
         )
 
     # Pairwise.
@@ -150,7 +295,16 @@ def verbosity_bias(
         mode=js.mode,
         n_examples=len(len_diffs),
         threshold=threshold,
-        flagged=(not np.isnan(rho)) and abs(rho) > threshold,
+        p_threshold=p_threshold,
+        min_n=min_n,
+        flagged=_is_flagged(
+            rho,
+            p,
+            len(len_diffs),
+            threshold=threshold,
+            p_threshold=p_threshold,
+            min_n=min_n,
+        ),
         longer_response_win_rate=longer_rate,
         length_winrate_rho=rho,
         length_winrate_p=p,
