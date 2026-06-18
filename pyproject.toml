@@ -27,6 +27,13 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.10",
 ]
+# Heavy, optional: authoritative stats libraries used only to cross-validate the
+# hand-rolled estimators in tests/test_reference_validation.py. Not required to
+# run the package or the default dev/test suite (those tests importorskip).
+refcheck = [
+    "statsmodels>=0.14",
+    "pingouin>=0.5",
+]
 
 [project.scripts]
 judge-audit = "judge_auditor.cli:app"
