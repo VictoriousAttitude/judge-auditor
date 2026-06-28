@@ -26,7 +26,7 @@ import numpy as np
 import pytest
 
 from judge_auditor.analysis.consistency import fleiss_kappa, icc_oneway, icc_twoway
-from judge_auditor.analysis.stats import wilson_ci
+from judge_auditor.analysis.stats import cohen_kappa, wilson_ci
 from judge_auditor.analysis.verbosity_bias import _partial_spearman
 
 # --- Literature anchor (no optional dependencies) -------------------------------
@@ -53,6 +53,14 @@ def test_icc_matches_shrout_fleiss_1979_worked_example():
 
 
 # --- statsmodels cross-checks ---------------------------------------------------
+
+
+def test_cohen_kappa_matches_sklearn():
+    skm = pytest.importorskip("sklearn.metrics")
+    rng = np.random.default_rng(0)
+    a = [int(x) for x in rng.integers(0, 3, size=50)]
+    b = [int(x) for x in rng.integers(0, 3, size=50)]
+    assert abs(cohen_kappa(a, b) - float(skm.cohen_kappa_score(a, b))) < 1e-9
 
 
 def test_fleiss_kappa_matches_statsmodels():

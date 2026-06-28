@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.stats import pearsonr
-from sklearn.metrics import cohen_kappa_score
 
 from judge_auditor import synthetic as S
 from judge_auditor.analysis.consistency import consistency
@@ -39,13 +38,6 @@ def pairwise_set(rows, runs: int = 6):
 
 
 # --- stats primitives -----------------------------------------------------------
-
-
-def test_cohen_kappa_matches_sklearn():
-    rng = np.random.default_rng(0)
-    a = [int(x) for x in rng.integers(0, 3, size=50)]
-    b = [int(x) for x in rng.integers(0, 3, size=50)]
-    assert abs(cohen_kappa(a, b) - float(cohen_kappa_score(a, b))) < 1e-9
 
 
 def test_cohen_kappa_perfect_and_degenerate():
