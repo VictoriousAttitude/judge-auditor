@@ -20,9 +20,18 @@ import os
 import time
 from dataclasses import dataclass
 
-from ..config import AuditConfig, EvalExample, JudgeConfig, JudgeMode, PairwiseChoice, Winner
+from ..config import (
+    AuditConfig,
+    EvalExample,
+    JudgeConfig,
+    JudgeMode,
+    PairwiseChoice,
+    Probe,
+    Winner,
+)
 from ..records import JudgmentRecord, JudgmentSet, TaskKey
 from .parser import parse_pairwise, parse_scalar
+from .probes import probe_prefix
 from .protocol import JudgeBackend
 from .sampling import stratified_sample
 
@@ -33,10 +42,17 @@ class _Task:
     run_index: int
     ordering: str | None  # "AB" | "BA" | None (scalar)
     rubric_variant: int = 0
+    probe: Probe = Probe.NEUTRAL
 
     @property
     def key(self) -> TaskKey:
-        return (self.example.id, self.run_index, self.rubric_variant, self.ordering)
+        return (
+            self.example.id,
+            self.run_index,
+            self.rubric_variant,
+            self.probe.value,
+            self.ordering,
+        )
 
 
 def _canonical_winner(choice: PairwiseChoice, ordering: str) -> Winner:
@@ -69,20 +85,34 @@ class JudgeExecutor:
             return stratified_sample(examples, self.audit.sample_size, self.audit.seed)
         return list(examples)
 
-    def _build_tasks(self, examples: list[EvalExample]) -> list[_Task]:
+    def _enabled_probes(self) -> list[Probe]:
+        """The extra probe conditions to collect (empty unless opted in)."""
+        probes: list[Probe] = []
+        if self.audit.probe_sycophancy:
+            probes += [Probe.SYCOPHANCY_UP, Probe.SYCOPHANCY_DOWN]
+        if self.audit.probe_anchoring and self.judge.mode is JudgeMode.SCALAR:
+            probes += [Probe.ANCHOR_UP, Probe.ANCHOR_DOWN]
+        return probes
+
+    def _runs(self, ex: EvalExample, variant: int, probe: Probe) -> list[_Task]:
         k = self.audit.runs_per_example
+        if self.judge.mode is JudgeMode.PAIRWISE:
+            n_ab = (k + 1) // 2  # the spare run (odd K) goes to the A,B ordering
+            return [_Task(ex, i, "AB" if i < n_ab else "BA", variant, probe) for i in range(k)]
+        return [_Task(ex, i, None, variant, probe) for i in range(k)]
+
+    def _build_tasks(self, examples: list[EvalExample]) -> list[_Task]:
+        n_variants = len(self.judge.templates)
+        probes = self._enabled_probes()
         tasks: list[_Task] = []
         for ex in examples:
-            if self.judge.mode is JudgeMode.PAIRWISE:
-                if ex.response_b is None:
-                    raise ValueError(f"example {ex.id!r} has no response_b for pairwise mode")
-                n_ab = (k + 1) // 2  # the spare run (odd K) goes to the A,B ordering
-                for i in range(k):
-                    ordering = "AB" if i < n_ab else "BA"
-                    tasks.append(_Task(ex, i, ordering))
-            else:
-                for i in range(k):
-                    tasks.append(_Task(ex, i, None))
+            if self.judge.mode is JudgeMode.PAIRWISE and ex.response_b is None:
+                raise ValueError(f"example {ex.id!r} has no response_b for pairwise mode")
+            for variant in range(n_variants):
+                tasks += self._runs(ex, variant, Probe.NEUTRAL)
+            # Probes ride only the canonical rubric, to keep the call count bounded.
+            for probe in probes:
+                tasks += self._runs(ex, 0, probe)
         return tasks
 
     def count_tasks(self, examples: list[EvalExample]) -> int:
@@ -93,17 +123,25 @@ class JudgeExecutor:
 
     def _render(self, task: _Task) -> list[dict[str, str]]:
         ex = task.example
+        template = self.judge.templates[task.rubric_variant]
         if self.judge.mode is JudgeMode.PAIRWISE:
             assert ex.response_b is not None
             if task.ordering == "AB":
                 first, second = ex.response_a, ex.response_b
             else:
                 first, second = ex.response_b, ex.response_a
-            user = self.judge.prompt_template.format(
-                prompt=ex.prompt, response_a=first, response_b=second
-            )
+            user = template.format(prompt=ex.prompt, response_a=first, response_b=second)
         else:
-            user = self.judge.prompt_template.format(prompt=ex.prompt, response=ex.response_a)
+            user = template.format(prompt=ex.prompt, response=ex.response_a)
+
+        prefix = probe_prefix(
+            task.probe,
+            self.judge.mode,
+            ordering=task.ordering,
+            score_min=self.judge.score_min,
+            score_max=self.judge.score_max,
+        )
+        user = prefix + user
 
         messages: list[dict[str, str]] = []
         if self.judge.system_prompt:
@@ -121,6 +159,7 @@ class JudgeExecutor:
             example_id=task.example.id,
             run_index=task.run_index,
             rubric_variant=task.rubric_variant,
+            probe=task.probe,
             ordering=task.ordering,
             raw_response=resp.text,
             parse_ok=False,
@@ -177,7 +216,7 @@ class JudgeExecutor:
         self._flush(buffer)  # final partial batch
 
         records = list(done.values()) + new_records
-        records.sort(key=lambda r: (r.example_id, r.rubric_variant, r.run_index))
+        records.sort(key=lambda r: (r.example_id, r.rubric_variant, r.probe.value, r.run_index))
         return JudgmentSet(mode=self.judge.mode, model=self.judge.model, records=records)
 
     # -- checkpointing -----------------------------------------------------------

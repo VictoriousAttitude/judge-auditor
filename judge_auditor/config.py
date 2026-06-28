@@ -42,6 +42,25 @@ class PairwiseChoice(StrEnum):
     TIE = "tie"
 
 
+class Probe(StrEnum):
+    """A prompt perturbation collected alongside the neutral judgment.
+
+    The runner re-judges each example under a balanced *up*/*down* pair so the
+    probe-bias analysis can isolate how far the verdict moves toward an injected
+    suggestion (the swing between the two directions cancels per-example constants).
+
+    * ``SYCOPHANCY_*`` injects a stated user opinion (scalar: a high/low score is
+      deserved; pairwise: a named response is better — referenced by content).
+    * ``ANCHOR_*`` injects an irrelevant numeric reference score (scalar only).
+    """
+
+    NEUTRAL = "neutral"
+    SYCOPHANCY_UP = "sycophancy_up"
+    SYCOPHANCY_DOWN = "sycophancy_down"
+    ANCHOR_UP = "anchor_up"
+    ANCHOR_DOWN = "anchor_down"
+
+
 def _template_fields(template: str) -> set[str]:
     """Return the set of ``{placeholder}`` names referenced by a format string."""
     return {
@@ -71,21 +90,30 @@ class JudgeConfig:
     # Scalar score bounds, used by the parser and downstream scale analysis.
     score_min: float = 1.0
     score_max: float = 10.0
+    # Optional same-intent paraphrases of ``prompt_template``. When supplied the runner
+    # collects judgments under each one (variant 0 is ``prompt_template`` itself), so the
+    # rubric-robustness analysis can check whether verdicts survive rephrasing.
+    rubric_variants: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        fields = _template_fields(self.prompt_template)
         if self.mode is JudgeMode.PAIRWISE:
             required = {"prompt", "response_a", "response_b"}
         else:
             required = {"prompt", "response"}
-        missing = required - fields
-        if missing:
-            raise ValueError(
-                f"{self.mode.value} prompt_template is missing placeholders: "
-                f"{sorted(missing)} (found {sorted(fields)})"
-            )
+        for template in self.templates:
+            missing = required - _template_fields(template)
+            if missing:
+                raise ValueError(
+                    f"{self.mode.value} prompt_template is missing placeholders: "
+                    f"{sorted(missing)} (found {sorted(_template_fields(template))})"
+                )
         if self.mode is JudgeMode.SCALAR and self.score_min >= self.score_max:
             raise ValueError("score_min must be < score_max")
+
+    @property
+    def templates(self) -> tuple[str, ...]:
+        """All rubric phrasings to audit: the base template followed by any variants."""
+        return (self.prompt_template, *self.rubric_variants)
 
 
 @dataclass(frozen=True)
@@ -100,9 +128,14 @@ class EvalExample:
     prompt: str
     response_a: str
     response_b: str | None = None
-    # Optional ground-truth/expert quality score, enabling partial-correlation
-    # control in the verbosity-bias analysis.
+    # Optional ground-truth/expert quality score. Drives partial-correlation control
+    # in verbosity-bias analysis and serves as the scalar validity target (does the
+    # judge's score track the true quality?).
     quality_label: float | None = None
+    # Optional ground-truth winner for pairwise validity: the response a human/expert
+    # judged better. Lets the audit ask "does the judge agree with the truth?", not
+    # just "does the judge agree with itself?".
+    preferred_winner: Winner | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -123,6 +156,12 @@ class AuditConfig:
     checkpoint_path: str | None = None
     # Flush completed records to the checkpoint after this many tasks.
     checkpoint_every: int = 20
+    # Opt-in probe conditions (off by default => no extra calls, no behavior change).
+    # When enabled the runner collects a balanced up/down probe pair per example at the
+    # canonical rubric, feeding the sycophancy / anchoring detectors. Anchoring needs a
+    # numeric scale, so it is ignored for pairwise judges.
+    probe_sycophancy: bool = False
+    probe_anchoring: bool = False
 
     def __post_init__(self) -> None:
         if self.runs_per_example < 1:

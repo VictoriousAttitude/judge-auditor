@@ -9,6 +9,19 @@ SELF-CONSISTENCY (scalar)
   ICC(2,1):       0.810 [0.730, 0.870]
   Within-ex SD:   0.650
 
+VALIDITY (vs ground truth)
+  Score~truth Pearson:  0.810 [0.720, 0.880]  [good]
+  Score~truth Spearman: 0.800   (p=0.000)  flagged=False
+  Labeled examples:     40
+
+RUBRIC ROBUSTNESS (3 variants)
+  Cross-variant ICC:  0.840 [0.760, 0.900]  [good]
+  Mean score spread:  0.320 pts   (max 1.100)  flagged=False
+
+PROBE SENSITIVITY (injected suggestion)
+  Sycophancy  swing: 0.030 [-0.010, 0.070] of scale  (+0.27 pts, n=40)  flagged=False
+  Anchoring   swing: 0.020 [-0.020, 0.060] of scale  (+0.18 pts, n=40)  flagged=False
+
 VERBOSITY BIAS
   Score~length Spearman: 0.050   (p=0.620)  flagged=False
   Partial (vs quality):  0.020

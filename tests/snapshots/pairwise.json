@@ -92,6 +92,26 @@
     ],
     "required_pairs": null
   },
+  "validity": {
+    "mode": "pairwise",
+    "available": true,
+    "n_labeled": 40,
+    "min_n": 8,
+    "interpretation": "moderate",
+    "flagged": false,
+    "pearson_r": null,
+    "spearman_rho": null,
+    "spearman_p": null,
+    "agreement_rate": 0.78,
+    "cohen_kappa": {
+      "point": 0.55,
+      "low": 0.44,
+      "high": 0.66,
+      "confidence": 0.95
+    },
+    "accuracy_excl_ties": 0.8,
+    "n_decisive": 38
+  },
   "position": {
     "n_decisions": 600,
     "first_position_rate": {
@@ -119,6 +139,47 @@
       "ex33"
     ],
     "tie_rate": 0.06
+  },
+  "rubric": {
+    "mode": "pairwise",
+    "available": true,
+    "n_variants": 2,
+    "n_examples": 40,
+    "min_n": 8,
+    "interpretation": "substantial",
+    "flagged": false,
+    "icc": null,
+    "mean_score_spread": null,
+    "max_score_spread": null,
+    "kappa": {
+      "point": 0.72,
+      "low": 0.61,
+      "high": 0.82,
+      "confidence": 0.95
+    },
+    "winner_flip_rate": 0.1,
+    "n_flipped": 4
+  },
+  "probe": {
+    "mode": "pairwise",
+    "available": true,
+    "sycophancy": {
+      "kind": "sycophancy",
+      "mode": "pairwise",
+      "n_examples": 40,
+      "min_n": 8,
+      "effect": {
+        "point": 0.06,
+        "low": -0.02,
+        "high": 0.14,
+        "confidence": 0.95
+      },
+      "flag_threshold": 0.1,
+      "severe_threshold": 0.25,
+      "flagged": false,
+      "raw_pts": null
+    },
+    "anchoring": null
   },
   "overall": "MODERATE",
   "notes": [

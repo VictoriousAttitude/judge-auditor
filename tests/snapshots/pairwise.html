@@ -91,6 +91,24 @@
     </div>
 
     <div class="card">
+      <h2>VALIDITY (vs ground truth)</h2>
+      <table>
+<tr><td class="k">Cohen&#39;s kappa</td><td class="v">0.550 [0.440, 0.660] (moderate)</td></tr><tr><td class="k">Agreement rate</td><td class="v">0.780</td></tr><tr><td class="k">Accuracy (excl. ties)</td><td class="v">0.800 (n=38)</td></tr><tr><td class="k">Labeled examples</td><td class="v">40</td></tr><tr><td class="k">Flagged</td><td class="v">no</td></tr>      </table>
+    </div>
+
+    <div class="card">
+      <h2>RUBRIC ROBUSTNESS</h2>
+      <table>
+<tr><td class="k">Cross-variant kappa</td><td class="v">0.720 [0.610, 0.820] (substantial)</td></tr><tr><td class="k">Winner flip rate</td><td class="v">10% (4/40)</td></tr><tr><td class="k">Variants</td><td class="v">2</td></tr><tr><td class="k">Flagged</td><td class="v">no</td></tr>      </table>
+    </div>
+
+    <div class="card">
+      <h2>PROBE SENSITIVITY (injected suggestion)</h2>
+      <table>
+<tr><td class="k">Sycophancy swing</td><td class="v">0.060 [-0.020, 0.140] win rate</td></tr><tr><td class="k">Flagged</td><td class="v">no</td></tr>      </table>
+    </div>
+
+    <div class="card">
       <h2>POSITION BIAS</h2>
       <table>
 <tr><td class="k">First-position rate</td><td class="v">0.570 [0.530, 0.610]</td></tr><tr><td class="k">Binomial p (vs 0.5)</td><td class="v">0.001</td></tr><tr><td class="k">Favored position</td><td class="v">first</td></tr><tr><td class="k">Flip rate</td><td class="v">0.150 [0.070, 0.280] (6/40)</td></tr><tr><td class="k">Tie rate</td><td class="v">6%</td></tr>      </table>

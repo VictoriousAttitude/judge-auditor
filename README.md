@@ -9,7 +9,10 @@
 failure modes with proper statistics:
 
 - **Self-consistency** — does the judge agree with itself across repeated runs? (ICC for scalar scoring, Fleiss' κ for pairwise, with bootstrapped confidence intervals)
+- **Validity** — when you supply ground-truth labels, does the judge agree with the *truth*, not just with itself? (Pearson/Spearman for scalar, Cohen's κ for pairwise) A perfectly self-consistent judge can be consistently wrong.
+- **Rubric robustness** — when you supply alternate phrasings of the rubric, does the verdict survive paraphrasing it? (cross-variant ICC for scalar, Fleiss' κ + winner-flip rate for pairwise) A brittle judge's verdict partly reflects wording, not response quality.
 - **Position bias** — do verdicts flip when you swap response order?
+- **Probe sensitivity** — when you whisper a suggestion into the prompt, does the verdict follow it? Opt-in **sycophancy** (a stated user opinion) and **anchoring** (an irrelevant reference score, scalar only) probes measure the causal swing, not just a correlation.
 - **Verbosity bias** — does the judge reward length instead of quality?
 - **Scale compression** — is the judge really using its score range, or clustering in 2–3 bins?
 - **Statistical power** — how large must a real quality difference be before your judge can detect it? (the *noise floor*)
@@ -19,7 +22,9 @@ failure modes with proper statistics:
 The single most useful output: audit several judges on the same eval set and see how
 their reliability differs. This table is produced by `python examples/judge_comparison.py`
 from synthetic judges of known character (deterministic, no API key) — point the same
-machinery at real backends to compare GPT-4o / Claude / Llama / a local model.
+machinery at real backends to compare GPT-4o / Claude / Llama / a local model. For real
+judges, save each one's judgments (`run --save-judgments`) and combine them with
+`judge-audit compare` (see the Quickstart below).
 
 | Judge | Mode | Self-consistency | Position flip | Verbosity | Scale | Noise floor | Verdict |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -79,8 +84,8 @@ It sits one meta-level above the eval pipeline: *"I don't run your evals — I t
 **v0.1, pre-1.0.** The analysis core is tested and cross-validated against reference implementations, but the project is young: install is from source (not yet on PyPI), the public API may change before 1.0, and the OpenAI / Anthropic backends are covered by mocked and failure-injection tests rather than a live-API integration test. Use it, file issues — just pin a commit if you depend on it.
 
 - **Runner** (Layer 0) — done: backend-agnostic judge runner with repeated runs, position swapping, response parsing, bounded-concurrency async, checkpoint/resume. Supports pairwise and scalar modes. OpenAI / OpenAI-compatible, Anthropic, and mock backends.
-- **Analysis** (Phase 2) — done: consistency (ICC / Fleiss' kappa), position and verbosity bias, scale analysis, power / noise-floor, all with bootstrapped confidence intervals.
-- **Report + CLI** (Phase 3) — done: the `judge-audit` CLI with terminal, self-contained HTML, and JSON reports, plus an actionable recommendations engine.
+- **Analysis** (Phase 2) — done: consistency (ICC / Fleiss' kappa), validity against ground truth (Pearson / Cohen's kappa) when labels are supplied, rubric robustness (cross-variant ICC / Fleiss' kappa) when paraphrased rubrics are supplied, position and verbosity bias, opt-in sycophancy / anchoring probe sensitivity, scale analysis, power / noise-floor, all with bootstrapped confidence intervals.
+- **Report + CLI** (Phase 3) — done: the `judge-audit` CLI (`run` / `report` / `compare` / `diff`) with terminal, self-contained HTML, and JSON reports, a side-by-side comparison table, a CI-aware before/after diff, plus an actionable recommendations engine.
 - **Validation + methodology** (Phase 4) — done: end-to-end calibration / known-bias / null validation against synthetic judges, the comparison table above, and [METHODOLOGY.md](METHODOLOGY.md).
 - **Testing** — a reliability tool has to be reliable itself, so the estimators carry their own evidence: the hand-rolled statistics are cross-validated against `statsmodels` / `pingouin` and a published worked example (Shrout & Fleiss 1979); their mathematical invariants are fuzzed with property-based tests; the detectors are checked by Monte-Carlo calibration (point-estimate unbiasedness, confidence-interval coverage, and false-alarm / sensitivity rates); backend retry and error handling are exercised by failure injection; the terminal / HTML / JSON reports are pinned by golden snapshots; and CI enforces a coverage floor.
 
@@ -112,6 +117,17 @@ judge-audit run -c examples/judge.toml -e examples/examples.jsonl \
 judge-audit run -c judge.toml -e examples.jsonl -b openai \
     --save-judgments judgments.json
 judge-audit report -j judgments.json -e examples.jsonl -f json
+
+# Audit several saved judges on the same eval set into one comparison table:
+judge-audit compare -e examples.jsonl \
+    -j "GPT-4o=gpt4o.json" -j "Claude=claude.json" -j "Llama=llama.json"
+
+# Diff two judges (baseline -> candidate), e.g. before/after a rubric edit:
+judge-audit diff -e examples.jsonl -j "Before=v1.json" -j "After=v2.json"
+
+# Also probe sycophancy and anchoring (opt-in; adds judge calls per example):
+judge-audit run -c judge.toml -e examples.jsonl -b openai -k 15 \
+    --probe-sycophancy --probe-anchoring
 ```
 
 A judge config is TOML or JSON; eval examples are JSONL or a JSON array. For pairwise
@@ -122,6 +138,8 @@ Non-`mock` runs print an estimated call count and prompt for confirmation before
 spending anything. As a rough guide, auditing 50 examples at `K = 15` is ~750 judge
 calls (on the order of a few dollars with a frontier model); use `--sample` to audit a
 stratified subset and `--checkpoint` to resume an interrupted run without paying twice.
+Each opt-in probe pair (`--probe-sycophancy`, `--probe-anchoring`) adds `2 × K` calls
+per example, so the probes are off by default.
 
 ## Quickstart (library)
 

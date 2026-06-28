@@ -56,6 +56,69 @@ def _consistency_lines(r: ReliabilityReport) -> list[str]:
     ]
 
 
+def _validity_lines(r: ReliabilityReport) -> list[str]:
+    v = r.validity
+    if not v.available:
+        return []
+    if v.mode is JudgeMode.SCALAR:
+        return [
+            "",
+            "VALIDITY (vs ground truth)",
+            f"  Score~truth Pearson:  {_ci(v.pearson_r)}  [{v.interpretation}]",
+            f"  Score~truth Spearman: {_num(v.spearman_rho)}"
+            f"   (p={_num(v.spearman_p)})  flagged={v.flagged}",
+            f"  Labeled examples:     {v.n_labeled}",
+        ]
+    return [
+        "",
+        "VALIDITY (vs ground truth)",
+        f"  Cohen's kappa:        {_ci(v.cohen_kappa)}  [{v.interpretation}]",
+        f"  Agreement rate:       {_num(v.agreement_rate)}   flagged={v.flagged}",
+        f"  Accuracy (excl ties): {_num(v.accuracy_excl_ties)}   (n={v.n_decisive})",
+        f"  Labeled examples:     {v.n_labeled}",
+    ]
+
+
+def _rubric_lines(r: ReliabilityReport) -> list[str]:
+    rb = r.rubric
+    if not rb.available:
+        return []
+    if rb.mode is JudgeMode.SCALAR:
+        return [
+            "",
+            f"RUBRIC ROBUSTNESS ({rb.n_variants} variants)",
+            f"  Cross-variant ICC:  {_ci(rb.icc)}  [{rb.interpretation}]",
+            f"  Mean score spread:  {_num(rb.mean_score_spread)} pts"
+            f"   (max {_num(rb.max_score_spread)})  flagged={rb.flagged}",
+        ]
+    return [
+        "",
+        f"RUBRIC ROBUSTNESS ({rb.n_variants} variants)",
+        f"  Cross-variant kappa: {_ci(rb.kappa)}  [{rb.interpretation}]",
+        f"  Winner flip rate:    {_pct(rb.winner_flip_rate)}"
+        f"   ({rb.n_flipped}/{rb.n_examples} examples)  flagged={rb.flagged}",
+    ]
+
+
+def _probe_lines(r: ReliabilityReport) -> list[str]:
+    pb = r.probe
+    if not pb.available:
+        return []
+    lines = ["", "PROBE SENSITIVITY (injected suggestion)"]
+    for e in pb.effects:
+        if e.mode is JudgeMode.SCALAR:
+            lines.append(
+                f"  {e.kind.capitalize():11s} swing: {_ci(e.effect)} of scale"
+                f"  ({_num(e.raw_pts, '+.2f')} pts, n={e.n_examples})  flagged={e.flagged}"
+            )
+        else:
+            lines.append(
+                f"  {e.kind.capitalize():11s} swing: {_ci(e.effect)} win rate"
+                f"  (n={e.n_examples})  flagged={e.flagged}"
+            )
+    return lines
+
+
 def _position_lines(r: ReliabilityReport) -> list[str]:
     p = r.position
     if p is None:
@@ -162,6 +225,9 @@ def render_terminal(report: ReliabilityReport) -> str:
     lines: list[str] = []
     lines += _header(report)
     lines += _consistency_lines(report)
+    lines += _validity_lines(report)
+    lines += _rubric_lines(report)
+    lines += _probe_lines(report)
     lines += _position_lines(report)
     lines += _verbosity_lines(report)
     lines += _scale_lines(report)

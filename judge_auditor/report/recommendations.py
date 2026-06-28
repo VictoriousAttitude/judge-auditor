@@ -74,6 +74,74 @@ def _verbosity_rec(report: ReliabilityReport) -> str | None:
     return None
 
 
+def _validity_rec(report: ReliabilityReport) -> str | None:
+    v = report.validity
+    if not v.available or not v.flagged:
+        return None
+    if v.mode is JudgeMode.SCALAR and v.pearson_r is not None:
+        return (
+            f"Low validity: judge scores correlate with ground truth only at "
+            f"r={v.pearson_r.point:.2f} ({v.interpretation}). Self-consistency measures "
+            "precision, not correctness — recalibrate the rubric against your labels, or "
+            "use a stronger judge model, before trusting the scores."
+        )
+    if v.cohen_kappa is not None:
+        return (
+            f"Low validity: judge verdicts agree with ground truth at only "
+            f"kappa={v.cohen_kappa.point:.2f} ({v.interpretation}, {v.agreement_rate:.0%} "
+            "raw agreement). A self-consistent judge can still be wrong — revise the "
+            "rubric against your labels, or use a stronger judge model."
+        )
+    return None
+
+
+def _rubric_rec(report: ReliabilityReport) -> str | None:
+    rb = report.rubric
+    if not rb.available or not rb.flagged:
+        return None
+    if rb.mode is JudgeMode.SCALAR and rb.icc is not None:
+        return (
+            f"Rubric brittleness: rephrasing the rubric moves scores (cross-variant "
+            f"ICC={rb.icc.point:.2f}, mean spread {rb.mean_score_spread:.1f} pts). Pin "
+            "one canonical rubric wording, make the criteria more concrete, or average "
+            "over several phrasings — the verdict should not depend on phrasing."
+        )
+    if rb.kappa is not None:
+        return (
+            f"Rubric brittleness: the winner flips on {rb.winner_flip_rate:.0%} of "
+            f"examples when the rubric is rephrased (cross-variant kappa={rb.kappa.point:.2f}). "
+            "Pin one canonical rubric wording or sharpen the comparison criteria so the "
+            "verdict is phrasing-independent."
+        )
+    return None
+
+
+def _probe_rec(report: ReliabilityReport) -> str | None:
+    pb = report.probe
+    if not pb.available or not pb.flagged:
+        return None
+    flagged = [e for e in pb.effects if e.flagged]
+    if any(e.kind == "sycophancy" for e in flagged):
+        e = next(e for e in flagged if e.kind == "sycophancy")
+        if e.mode is JudgeMode.SCALAR and e.raw_pts is not None:
+            return (
+                f"Sycophancy: stating a desired score moves the judge {e.raw_pts:+.1f} pts "
+                f"({e.effect.point:+.0%} of scale). Strip user opinions from the input, or "
+                "instruct the judge to ignore stated preferences and grade only the response."
+            )
+        return (
+            f"Sycophancy: stating a preference swings the win rate {e.effect.point:+.0%}. "
+            "Withhold any stated user preference from the judge, or instruct it to grade "
+            "only the responses, not the user's opinion."
+        )
+    e = next(e for e in flagged if e.kind == "anchoring")
+    return (
+        f"Anchoring: an irrelevant reference score moves the judge {e.raw_pts:+.1f} pts "
+        f"({e.effect.point:+.0%} of scale). Remove prior/reference scores from the prompt "
+        "so the judge grades the response on its own merits."
+    )
+
+
 def _scale_rec(report: ReliabilityReport) -> str | None:
     s = report.scale
     if s.mode is JudgeMode.SCALAR and s.compressed:
@@ -129,8 +197,11 @@ def recommendations(report: ReliabilityReport) -> list[str]:
     """Ordered, actionable mitigations for every problem the audit detected."""
     rules = (
         _consistency_rec,
+        _validity_rec,
+        _rubric_rec,
         _position_rec,
         _verbosity_rec,
+        _probe_rec,
         _scale_rec,
         _parse_rec,
         _power_rec,  # always-on noise-floor note comes last

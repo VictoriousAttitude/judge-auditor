@@ -89,6 +89,24 @@
 <tr><td class="k">ICC(1,1) — headline</td><td class="v">0.820 [0.740, 0.880] (good)</td></tr><tr><td class="k">ICC(2,1)</td><td class="v">0.810 [0.730, 0.870]</td></tr><tr><td class="k">Mean within-example SD</td><td class="v">0.650</td></tr><tr><td class="k">Runs per example</td><td class="v">20</td></tr>      </table>
     </div>
 
+    <div class="card">
+      <h2>VALIDITY (vs ground truth)</h2>
+      <table>
+<tr><td class="k">Score~truth Pearson</td><td class="v">0.810 [0.720, 0.880] (good)</td></tr><tr><td class="k">Score~truth Spearman</td><td class="v">0.800</td></tr><tr><td class="k">p-value</td><td class="v">0.000</td></tr><tr><td class="k">Labeled examples</td><td class="v">40</td></tr><tr><td class="k">Flagged</td><td class="v">no</td></tr>      </table>
+    </div>
+
+    <div class="card">
+      <h2>RUBRIC ROBUSTNESS</h2>
+      <table>
+<tr><td class="k">Cross-variant ICC</td><td class="v">0.840 [0.760, 0.900] (good)</td></tr><tr><td class="k">Mean score spread</td><td class="v">0.320 pts</td></tr><tr><td class="k">Max score spread</td><td class="v">1.100 pts</td></tr><tr><td class="k">Variants</td><td class="v">3</td></tr><tr><td class="k">Flagged</td><td class="v">no</td></tr>      </table>
+    </div>
+
+    <div class="card">
+      <h2>PROBE SENSITIVITY (injected suggestion)</h2>
+      <table>
+<tr><td class="k">Sycophancy swing</td><td class="v">0.030 [-0.010, 0.070] of scale (+0.27 pts)</td></tr><tr><td class="k">Anchoring swing</td><td class="v">0.020 [-0.020, 0.060] of scale (+0.18 pts)</td></tr><tr><td class="k">Flagged</td><td class="v">no</td></tr>      </table>
+    </div>
+
 
     <div class="card">
       <h2>VERBOSITY BIAS</h2>

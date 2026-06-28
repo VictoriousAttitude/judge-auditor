@@ -26,8 +26,11 @@ from judge_auditor.analysis.audit import ReliabilityReport
 from judge_auditor.analysis.consistency import ConsistencyResult
 from judge_auditor.analysis.position_bias import PositionBiasResult
 from judge_auditor.analysis.power_analysis import PowerAnalysisResult
+from judge_auditor.analysis.probe_bias import ProbeBiasResult, ProbeEffect
+from judge_auditor.analysis.rubric_robustness import RubricRobustnessResult
 from judge_auditor.analysis.scale_analysis import ScaleAnalysisResult
 from judge_auditor.analysis.stats import CI
+from judge_auditor.analysis.validity import ValidityResult
 from judge_auditor.analysis.verbosity_bias import VerbosityBiasResult
 from judge_auditor.config import JudgeMode
 from judge_auditor.report.html import render_html
@@ -88,7 +91,54 @@ def scalar_report() -> ReliabilityReport:
             power_curve=[(10, 0.88), (20, 0.62), (30, 0.51), (50, 0.39), (100, 0.28)],
             required_n=None,
         ),
+        validity=ValidityResult(
+            mode=JudgeMode.SCALAR,
+            available=True,
+            n_labeled=40,
+            interpretation="good",
+            flagged=False,
+            pearson_r=CI(0.810, 0.720, 0.880),
+            spearman_rho=0.800,
+            spearman_p=0.000,
+        ),
         position=None,
+        rubric=RubricRobustnessResult(
+            mode=JudgeMode.SCALAR,
+            available=True,
+            n_variants=3,
+            n_examples=40,
+            interpretation="good",
+            flagged=False,
+            icc=CI(0.840, 0.760, 0.900),
+            mean_score_spread=0.320,
+            max_score_spread=1.100,
+        ),
+        probe=ProbeBiasResult(
+            mode=JudgeMode.SCALAR,
+            available=True,
+            sycophancy=ProbeEffect(
+                kind="sycophancy",
+                mode=JudgeMode.SCALAR,
+                n_examples=40,
+                min_n=8,
+                effect=CI(0.030, -0.010, 0.070),
+                flag_threshold=0.05,
+                severe_threshold=0.15,
+                flagged=False,
+                raw_pts=0.270,
+            ),
+            anchoring=ProbeEffect(
+                kind="anchoring",
+                mode=JudgeMode.SCALAR,
+                n_examples=40,
+                min_n=8,
+                effect=CI(0.020, -0.020, 0.060),
+                flag_threshold=0.05,
+                severe_threshold=0.15,
+                flagged=False,
+                raw_pts=0.180,
+            ),
+        ),
         overall="HIGH",
         notes=[],
     )
@@ -142,6 +192,17 @@ def pairwise_report() -> ReliabilityReport:
             winrate_power_curve=[(10, 0.40), (20, 0.28), (50, 0.18), (100, 0.13)],
             required_pairs=None,
         ),
+        validity=ValidityResult(
+            mode=JudgeMode.PAIRWISE,
+            available=True,
+            n_labeled=40,
+            interpretation="moderate",
+            flagged=False,
+            agreement_rate=0.780,
+            cohen_kappa=CI(0.550, 0.440, 0.660),
+            accuracy_excl_ties=0.800,
+            n_decisive=38,
+        ),
         position=PositionBiasResult(
             n_decisions=600,
             first_position_rate=CI(0.570, 0.530, 0.610),
@@ -152,6 +213,31 @@ def pairwise_report() -> ReliabilityReport:
             flip_rate=CI(0.150, 0.070, 0.280),
             flipped_examples=["ex3", "ex7", "ex11", "ex18", "ex25", "ex33"],
             tie_rate=0.060,
+        ),
+        rubric=RubricRobustnessResult(
+            mode=JudgeMode.PAIRWISE,
+            available=True,
+            n_variants=2,
+            n_examples=40,
+            interpretation="substantial",
+            flagged=False,
+            kappa=CI(0.720, 0.610, 0.820),
+            winner_flip_rate=0.100,
+            n_flipped=4,
+        ),
+        probe=ProbeBiasResult(
+            mode=JudgeMode.PAIRWISE,
+            available=True,
+            sycophancy=ProbeEffect(
+                kind="sycophancy",
+                mode=JudgeMode.PAIRWISE,
+                n_examples=40,
+                min_n=8,
+                effect=CI(0.060, -0.020, 0.140),
+                flag_threshold=0.10,
+                severe_threshold=0.25,
+                flagged=False,
+            ),
         ),
         overall="MODERATE",
         notes=["Position bias toward the first-presented response (flip rate 15%)."],

@@ -72,6 +72,62 @@ def _consistency_rows(r: ReliabilityReport) -> list[tuple[str, str]]:
     ]
 
 
+def _validity_rows(r: ReliabilityReport) -> list[tuple[str, str]] | None:
+    v = r.validity
+    if not v.available:
+        return None
+    if v.mode is JudgeMode.SCALAR:
+        return [
+            ("Score~truth Pearson", f"{_ci(v.pearson_r)} ({v.interpretation})"),
+            ("Score~truth Spearman", _num(v.spearman_rho)),
+            ("p-value", _num(v.spearman_p)),
+            ("Labeled examples", str(v.n_labeled)),
+            ("Flagged", "yes" if v.flagged else "no"),
+        ]
+    return [
+        ("Cohen's kappa", f"{_ci(v.cohen_kappa)} ({v.interpretation})"),
+        ("Agreement rate", _num(v.agreement_rate)),
+        ("Accuracy (excl. ties)", f"{_num(v.accuracy_excl_ties)} (n={v.n_decisive})"),
+        ("Labeled examples", str(v.n_labeled)),
+        ("Flagged", "yes" if v.flagged else "no"),
+    ]
+
+
+def _rubric_rows(r: ReliabilityReport) -> list[tuple[str, str]] | None:
+    rb = r.rubric
+    if not rb.available:
+        return None
+    if rb.mode is JudgeMode.SCALAR:
+        return [
+            ("Cross-variant ICC", f"{_ci(rb.icc)} ({rb.interpretation})"),
+            ("Mean score spread", f"{_num(rb.mean_score_spread)} pts"),
+            ("Max score spread", f"{_num(rb.max_score_spread)} pts"),
+            ("Variants", str(rb.n_variants)),
+            ("Flagged", "yes" if rb.flagged else "no"),
+        ]
+    return [
+        ("Cross-variant kappa", f"{_ci(rb.kappa)} ({rb.interpretation})"),
+        ("Winner flip rate", f"{_pct(rb.winner_flip_rate)} ({rb.n_flipped}/{rb.n_examples})"),
+        ("Variants", str(rb.n_variants)),
+        ("Flagged", "yes" if rb.flagged else "no"),
+    ]
+
+
+def _probe_rows(r: ReliabilityReport) -> list[tuple[str, str]] | None:
+    pb = r.probe
+    if not pb.available:
+        return None
+    rows: list[tuple[str, str]] = []
+    for e in pb.effects:
+        if e.mode is JudgeMode.SCALAR:
+            value = f"{_ci(e.effect)} of scale ({_num(e.raw_pts, '+.2f')} pts)"
+        else:
+            value = f"{_ci(e.effect)} win rate"
+        rows.append((f"{e.kind.capitalize()} swing", value))
+    rows.append(("Flagged", "yes" if pb.flagged else "no"))
+    return rows
+
+
 def _position_rows(r: ReliabilityReport) -> list[tuple[str, str]] | None:
     p = r.position
     if p is None:
@@ -213,6 +269,9 @@ def build_context(report: ReliabilityReport) -> dict[str, object]:
         "parse_failure_rate": f"{report.parse_failure_rate:.1%}",
         "headline": _headline(report),
         "consistency_rows": _consistency_rows(report),
+        "validity_rows": _validity_rows(report),
+        "rubric_rows": _rubric_rows(report),
+        "probe_rows": _probe_rows(report),
         "position_rows": _position_rows(report),
         "verbosity_rows": _verbosity_rows(report),
         "scale_rows": _scale_rows(report),

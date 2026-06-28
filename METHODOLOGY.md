@@ -52,6 +52,70 @@ category counts, not rater identity — again exactly right for exchangeable run
 Interpretation bands follow Landis & Koch (1977): `< 0` poor, `< 0.20` slight,
 `< 0.40` fair, `< 0.60` moderate, `< 0.80` substantial, otherwise almost perfect.
 
+## Validity (vs ground truth)
+
+Self-consistency measures *precision* — whether the judge agrees with itself. It says
+nothing about *accuracy*: a judge can score every answer two points too low, or pick
+the wrong winner every time, with perfect self-consistency. When you supply ground
+truth (`quality_label` for scalar, `preferred_winner` for pairwise) the audit also
+measures whether the judge agrees with the **truth**.
+
+- **Scalar:** Pearson correlation (with a bootstrap CI) and Spearman rank correlation
+  between the per-example mean judge score and the ground-truth quality label.
+- **Pairwise:** Cohen's kappa (chance-corrected agreement, with a bootstrap CI), the
+  raw agreement rate, and the accuracy excluding ties, between the judge's majority
+  winner and the preferred winner.
+
+Interpretation bands for the correlation/kappa follow the same magnitude convention:
+`< 0.30` poor, `< 0.50` weak, `< 0.70` moderate, otherwise good.
+
+Validity is reported only when at least two labeled examples are present, and stays
+entirely silent (no verdict impact) otherwise, so users without ground truth see no
+change. The flag is deliberately **not** a significance test: the worst judges have a
+validity indistinguishable from zero, which a `p < 0.05` gate would let pass. Instead
+the judge is flagged when the *upper* bound of the validity CI is below the moderate
+threshold (Pearson `r` or Cohen's kappa) on at least `min_n = 8` labeled examples —
+i.e. we can confidently rule out acceptable validity. A flagged judge downgrades the
+overall verdict just like any other detected problem.
+
+## Rubric robustness (vs paraphrasing)
+
+A judge's verdict should reflect the response, not the incidental wording of the
+rubric. When you supply one or more paraphrased rubrics (same intent, different
+phrasing), the runner fans every example out across all variants and stamps each
+judgment with its `rubric_variant`. This section asks whether the verdict survives
+the paraphrase. If it does not, the judge is **brittle**: part of its signal is an
+artifact of prompt phrasing rather than response quality.
+
+Two design choices keep this honest:
+
+- **Headline metrics use the canonical rubric only.** All within-judge metrics
+  (self-consistency, the biases, scale, power) are computed on `rubric_variant == 0`
+  alone, so cross-rubric disagreement does not leak into — and inflate — the
+  self-consistency noise floor. For a single-rubric audit this is a no-op.
+- **Agreement is measured on per-example *aggregates*.** We first collapse each
+  example's `K` runs under a given variant to one number (mean score, or majority
+  winner), then compare *across* variants. Averaging out within-variant run noise
+  first means what remains is the systematic effect of phrasing.
+
+- **Scalar:** cross-variant **ICC(2,1)** (two-way, absolute agreement) on the
+  per-example × per-variant mean-score matrix, with a bootstrap CI resampling
+  examples. Here the two-way form is the *correct* one — unlike the exchangeable
+  repeat runs, a rubric variant is a genuine identifiable crossed factor (variant 1
+  is the same rephrasing on every example). We also report the mean and max
+  per-example score spread (max−min across the per-variant means).
+- **Pairwise:** cross-variant **Fleiss' kappa** on the per-example majority winner
+  under each variant (bootstrap CI), plus the **winner-flip rate** — the fraction of
+  examples whose majority winner is not unanimous across variants.
+
+Robustness is reported only when the audit ran at least two rubric variants and is
+otherwise entirely silent (no verdict impact), exactly like validity without ground
+truth. The flag uses the same confidently-rule-out logic: it fires when the bootstrap
+CI's upper bound stays below the robust bar (ICC `< 0.75`, Fleiss' kappa `< 0.60`) on
+at least `min_n = 8` complete examples. A flagged judge downgrades the verdict to
+`MODERATE`, or to `LOW` when the point estimate is below the low bar (ICC `< 0.50`,
+kappa `< 0.40`) — i.e. the verdict is barely phrasing-independent at all.
+
 ## Position bias (pairwise)
 
 Two complementary views, both from the same `A,B` / `B,A` runs:
@@ -67,6 +131,42 @@ Two complementary views, both from the same `A,B` / `B,A` runs:
 
 A high first-position rate *and* a high flip rate is systematic order bias; a high
 flip rate with a ~0.5 first rate is just noise.
+
+## Probe sensitivity (sycophancy and anchoring)
+
+The biases above are *observational* — read off the verdicts the judge produced
+unprompted. This section is *interventional*: it whispers a suggestion into the prompt
+and measures how far the verdict follows. Both probes are opt-in (`--probe-sycophancy`,
+`--probe-anchoring`), off by default so a plain audit makes no extra calls.
+
+- **Sycophancy** prepends a stated user opinion (scalar: "this deserves a high/low
+  score"; pairwise: "Response X is clearly better"). A judge that caves is rewarding
+  agreement with the user, not response quality.
+- **Anchoring** prepends an irrelevant numeric reference ("a previous reviewer scored
+  this 10/10"). A judge that drifts toward it is swayed by a number carrying no signal.
+  Anchoring needs a numeric scale, so it is scalar-only.
+
+Each probe is collected as a balanced **up/down** pair: the runner re-judges every
+example under both directions, at the canonical rubric only (`rubric_variant == 0`) to
+keep the call count bounded. The effect is the per-example **swing** between the two
+directions — `mean(up) − mean(down)` — averaged over examples. Differencing the two
+directions cancels any per-example constant (the judge's baseline opinion of that
+response), so what remains is the causal pull of the injected suggestion, free of the
+response-quality confound.
+
+- **Scalar:** the swing of the mean score, normalized to a fraction of the score range
+  ("moved X% of the scale"), with a bootstrap CI resampling examples. The same math
+  serves sycophancy and anchoring (only the injected text differs).
+- **Pairwise:** the swing of the win rate for content A (ties counted as half), in
+  `[−1, 1]`. The sycophancy cue is phrased against the *presented* label that holds the
+  targeted content, so it stays a content suggestion orthogonal to position.
+
+Unlike validity (which fires when it can *rule out* a good correlation), a bias flag
+uses a **significance gate**: it fires only when the bootstrap CI excludes a *zero*
+swing in the suggested direction (`effect.low` above the threshold) on at least
+`min_n = 8` examples. A swing indistinguishable from zero is no evidence of bias. A
+flagged probe downgrades the verdict to `MODERATE`, or to `LOW` when the swing is large
+(scalar `> 15%` of scale; pairwise `> 25` win-rate points).
 
 ## Verbosity bias
 
@@ -156,8 +256,18 @@ dominates.
 - Verbosity length uses a word-count proxy, not a tokenizer; supply precomputed token
   lengths if you need token-exact correlations.
 - Partial-correlation control for verbosity requires ground-truth `quality_label`s.
-- Kappa and ICC assume the `K` runs are exchangeable. If you deliberately vary the
-  rubric across runs, analyze each variant separately.
+- Validity requires ground truth (`quality_label` / `preferred_winner`); without it the
+  audit measures only precision, not correctness, and the validity section is silent.
+- Rubric robustness requires at least two rubric variants; without them the section is
+  silent and the headline metrics run on the single rubric as before.
+- Probe sensitivity (sycophancy / anchoring) is opt-in and adds judge calls; the probes
+  measure susceptibility to the *specific* cues injected here, not every persuasion
+  vector. **Self-enhancement bias** (a judge favoring its own authorship) is not yet
+  probed — it needs a per-response authorship data model — and is a known gap.
+- Kappa and ICC for self-consistency assume the `K` runs are exchangeable, so the
+  headline metrics are computed on the canonical rubric (`rubric_variant == 0`) alone;
+  cross-rubric disagreement is measured separately by the robustness section rather
+  than folded into the noise floor.
 
 ## Validation
 
@@ -171,6 +281,21 @@ constructed properties (`judge_auditor/synthetic.py`, `tests/test_validation.py`
   first, verdict `LOW`); a high-noise judge is flagged `LOW`.
 - **Null:** a self-consistent, unbiased judge reports high consistency, no flagged
   biases, a small noise floor, and verdict `HIGH`.
+- **Validity:** a judge generated to be self-consistent yet uncorrelated with the
+  ground truth (scalar `rho = 0`, or pairwise accuracy 0.5) is flagged on validity and
+  downgraded to `LOW` despite a clean reliability profile; a judge built to track the
+  truth (`rho = 0.9`) keeps its `HIGH` verdict.
+- **Rubric robustness:** a judge built to ignore the paraphrase (sensitivity 0) keeps
+  its `HIGH` verdict with no flag; one whose verdict is fully driven by phrasing
+  (scalar sensitivity 1, or every pairwise winner flipping on the alternate rubric) is
+  flagged brittle and downgraded to `LOW`; a pairwise set constructed with an exact
+  flip fraction recovers that winner-flip rate; and an audit with a single rubric
+  leaves the section silent and the verdict untouched.
+- **Probe sensitivity:** a judge built to swing its score by a known fraction of the
+  scale under the sycophancy / anchoring cue recovers that swing; a pairwise judge that
+  complies on an exact fraction of examples recovers that win-rate swing; the verdict
+  downgrades (to `LOW` for a large swing) while a probe-free or zero-swing audit leaves
+  the section silent.
 
 ## References
 

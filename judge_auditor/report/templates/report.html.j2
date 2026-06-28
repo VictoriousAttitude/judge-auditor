@@ -91,6 +91,33 @@
       </table>
     </div>
 
+    {% if validity_rows %}
+    <div class="card">
+      <h2>VALIDITY (vs ground truth)</h2>
+      <table>
+        {% for k, v in validity_rows %}<tr><td class="k">{{ k }}</td><td class="v">{{ v }}</td></tr>{% endfor %}
+      </table>
+    </div>
+    {% endif %}
+
+    {% if rubric_rows %}
+    <div class="card">
+      <h2>RUBRIC ROBUSTNESS</h2>
+      <table>
+        {% for k, v in rubric_rows %}<tr><td class="k">{{ k }}</td><td class="v">{{ v }}</td></tr>{% endfor %}
+      </table>
+    </div>
+    {% endif %}
+
+    {% if probe_rows %}
+    <div class="card">
+      <h2>PROBE SENSITIVITY (injected suggestion)</h2>
+      <table>
+        {% for k, v in probe_rows %}<tr><td class="k">{{ k }}</td><td class="v">{{ v }}</td></tr>{% endfor %}
+      </table>
+    </div>
+    {% endif %}
+
     {% if position_rows %}
     <div class="card">
       <h2>POSITION BIAS</h2>

@@ -4,7 +4,7 @@ from collections import Counter
 
 import pytest
 
-from judge_auditor.config import AuditConfig, EvalExample, JudgeConfig, JudgeMode, Winner
+from judge_auditor.config import AuditConfig, EvalExample, JudgeConfig, JudgeMode, Probe, Winner
 from judge_auditor.runner.backends.mock import MockBackend
 from judge_auditor.runner.executor import JudgeExecutor
 
@@ -150,3 +150,126 @@ def test_pairwise_config_requires_response_b(scalar_config):
 def test_config_validates_template_placeholders():
     with pytest.raises(ValueError, match="missing placeholders"):
         JudgeConfig(model="m", prompt_template="no slots", mode=JudgeMode.SCALAR)
+
+
+# --- Rubric variants ------------------------------------------------------------
+
+
+def test_templates_property_lists_base_then_variants():
+    cfg = JudgeConfig(
+        model="m",
+        prompt_template="Q: {prompt}\nR: {response}\nScore 1-10.",
+        mode=JudgeMode.SCALAR,
+        rubric_variants=("Rate {response} for {prompt} on 1-10.",),
+    )
+    assert len(cfg.templates) == 2
+    assert cfg.templates[0] == cfg.prompt_template
+
+
+def test_config_validates_variant_placeholders():
+    with pytest.raises(ValueError, match="missing placeholders"):
+        JudgeConfig(
+            model="m",
+            prompt_template="Q: {prompt}\nR: {response}\nScore.",
+            mode=JudgeMode.SCALAR,
+            rubric_variants=("this variant forgot the slots",),
+        )
+
+
+async def test_runs_fan_out_over_rubric_variants(scalar_examples):
+    cfg = JudgeConfig(
+        model="m",
+        prompt_template="Q: {prompt}\nR: {response}\nScore 1-10.",
+        mode=JudgeMode.SCALAR,
+        rubric_variants=("Rephrased: rate {response} for {prompt} 1-10.",),
+    )
+    ex = JudgeExecutor(MockBackend(content_score_scalar), cfg, AuditConfig(runs_per_example=3))
+    result = await ex.run(scalar_examples)
+    # K runs per (example, variant); two variants => double the records.
+    assert len(result) == 3 * 2 * len(scalar_examples)
+    assert {r.rubric_variant for r in result.records} == {0, 1}
+    # Each example/variant cell has exactly K runs.
+    cell = [r for r in result.records if r.example_id == "ex0" and r.rubric_variant == 1]
+    assert len(cell) == 3
+
+
+# --- Probes ---------------------------------------------------------------------
+
+
+async def test_scalar_probes_add_balanced_conditions(scalar_config, scalar_examples):
+    audit = AuditConfig(runs_per_example=4, probe_sycophancy=True, probe_anchoring=True)
+    ex = JudgeExecutor(MockBackend(content_score_scalar), scalar_config, audit)
+    result = await ex.run(scalar_examples)
+    # NEUTRAL + 2 sycophancy + 2 anchoring directions, K runs each.
+    n = len(scalar_examples)
+    assert len(result) == 4 * 5 * n
+    probes = Counter(r.probe for r in result.records)
+    assert probes[Probe.NEUTRAL] == 4 * n
+    for p in (Probe.SYCOPHANCY_UP, Probe.SYCOPHANCY_DOWN, Probe.ANCHOR_UP, Probe.ANCHOR_DOWN):
+        assert probes[p] == 4 * n
+
+
+async def test_pairwise_anchoring_probe_is_ignored(pairwise_config, pairwise_examples):
+    """Anchoring needs a numeric scale, so it adds no calls in pairwise mode."""
+    audit = AuditConfig(runs_per_example=4, probe_sycophancy=True, probe_anchoring=True)
+    ex = JudgeExecutor(MockBackend(content_pref_pairwise), pairwise_config, audit)
+    result = await ex.run(pairwise_examples)
+    probes = {r.probe for r in result.records}
+    assert Probe.ANCHOR_UP not in probes and Probe.ANCHOR_DOWN not in probes
+    assert Probe.SYCOPHANCY_UP in probes and Probe.SYCOPHANCY_DOWN in probes
+
+
+async def test_probes_ride_only_canonical_rubric(scalar_examples):
+    cfg = JudgeConfig(
+        model="m",
+        prompt_template="Q: {prompt}\nR: {response}\nScore 1-10.",
+        mode=JudgeMode.SCALAR,
+        rubric_variants=("Rephrased: rate {response} for {prompt} 1-10.",),
+    )
+    audit = AuditConfig(runs_per_example=2, probe_sycophancy=True)
+    ex = JudgeExecutor(MockBackend(content_score_scalar), cfg, audit)
+    result = await ex.run(scalar_examples)
+    # Probe records only exist at rubric_variant 0 (bounded call count).
+    probe_variants = {r.rubric_variant for r in result.records if r.probe is not Probe.NEUTRAL}
+    assert probe_variants == {0}
+
+
+async def test_probe_prefix_appears_in_prompt(scalar_examples):
+    seen: list[tuple[str, str]] = []
+
+    def capture(messages, config):
+        seen.append((messages[-1]["content"], config.model))
+        return '{"score": 5}'
+
+    cfg = JudgeConfig(
+        model="m",
+        prompt_template="BASE {prompt} {response}",
+        mode=JudgeMode.SCALAR,
+    )
+    audit = AuditConfig(runs_per_example=1, probe_sycophancy=True)
+    ex = JudgeExecutor(MockBackend(capture), cfg, audit)
+    await ex.run(scalar_examples[:1])
+    texts = [t for t, _ in seen]
+    # The up/down sycophancy cues are prepended; the neutral run has no prefix.
+    assert any("high score" in t for t in texts)
+    assert any("low score" in t for t in texts)
+    assert any(t.startswith("BASE") for t in texts)
+
+
+async def test_variants_render_different_prompts(scalar_examples):
+    seen: list[str] = []
+
+    def capture(messages, config):
+        seen.append(messages[-1]["content"])
+        return '{"score": 5}'
+
+    cfg = JudgeConfig(
+        model="m",
+        prompt_template="BASE {prompt} {response}",
+        mode=JudgeMode.SCALAR,
+        rubric_variants=("ALT {prompt} {response}",),
+    )
+    ex = JudgeExecutor(MockBackend(capture), cfg, AuditConfig(runs_per_example=1))
+    await ex.run(scalar_examples[:1])
+    assert any(s.startswith("BASE") for s in seen)
+    assert any(s.startswith("ALT") for s in seen)

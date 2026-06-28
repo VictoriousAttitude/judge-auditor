@@ -6,7 +6,13 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from judge_auditor.cli import app, build_backend, load_examples, load_judge_config
+from judge_auditor.cli import (
+    _parse_labeled_path,
+    app,
+    build_backend,
+    load_examples,
+    load_judge_config,
+)
 
 runner = CliRunner()
 
@@ -106,6 +112,22 @@ def test_run_scalar_json_is_valid(tmp_path):
     assert "recommendations" in parsed
 
 
+def test_run_with_probe_flags_collects_probe_records(tmp_path):
+    cfg, exs = scalar_config(tmp_path), scalar_examples(tmp_path)
+    saved = tmp_path / "judgments.json"
+    result = runner.invoke(
+        app,
+        [
+            "run", "-c", str(cfg), "-e", str(exs), "-b", "mock", "-k", "4",
+            "--probe-sycophancy", "--probe-anchoring", "--save-judgments", str(saved),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(saved.read_text(encoding="utf-8"))
+    probes = {r["probe"] for r in data["records"]}
+    assert {"neutral", "sycophancy_up", "sycophancy_down", "anchor_up", "anchor_down"} == probes
+
+
 def test_run_pairwise_html_to_file(tmp_path):
     cfg, exs = pairwise_config(tmp_path), pairwise_examples(tmp_path)
     out = tmp_path / "report.html"
@@ -195,3 +217,127 @@ def test_run_example_missing_required_field_fails(tmp_path):
     result = runner.invoke(app, ["run", "-c", str(cfg), "-e", str(bad), "-b", "mock"])
     assert result.exit_code != 0
     assert isinstance(result.exception, KeyError)
+
+
+# --- compare command ------------------------------------------------------------
+
+
+def _save_scalar_judgments(tmp_path: Path, name: str) -> Path:
+    """Run the mock scalar judge once and persist its judgments to ``name``."""
+    cfg, exs = scalar_config(tmp_path), scalar_examples(tmp_path)
+    saved = tmp_path / name
+    result = runner.invoke(
+        app,
+        ["run", "-c", str(cfg), "-e", str(exs), "-b", "mock", "-k", "5",
+         "--save-judgments", str(saved)],
+    )
+    assert result.exit_code == 0, result.output
+    return saved
+
+
+def test_parse_labeled_path_explicit_label(tmp_path):
+    p = write(tmp_path / "j.json", "{}")
+    label, path = _parse_labeled_path(f"GPT-4o={p}")
+    assert label == "GPT-4o" and path == p
+
+
+def test_parse_labeled_path_defaults_to_stem(tmp_path):
+    p = write(tmp_path / "claude.json", "{}")
+    label, path = _parse_labeled_path(str(p))
+    assert label == "claude" and path == p
+
+
+def test_parse_labeled_path_missing_raises(tmp_path):
+    with pytest.raises(Exception, match="not found"):
+        _parse_labeled_path(f"x={tmp_path / 'nope.json'}")
+
+
+def test_compare_renders_table_with_both_judges(tmp_path):
+    a = _save_scalar_judgments(tmp_path, "a.json")
+    b = _save_scalar_judgments(tmp_path, "b.json")
+    exs = scalar_examples(tmp_path)
+    result = runner.invoke(
+        app,
+        ["compare", "-e", str(exs), "-j", f"Alpha={a}", "-j", f"Beta={b}"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "| Judge |" in result.output
+    assert "| --- |" in result.output
+    assert "Alpha" in result.output and "Beta" in result.output
+
+
+def test_compare_label_defaults_to_filename(tmp_path):
+    saved = _save_scalar_judgments(tmp_path, "myjudge.json")
+    exs = scalar_examples(tmp_path)
+    result = runner.invoke(app, ["compare", "-e", str(exs), "-j", str(saved)])
+    assert result.exit_code == 0, result.output
+    assert "myjudge" in result.output
+
+
+def test_compare_writes_to_file(tmp_path):
+    saved = _save_scalar_judgments(tmp_path, "j.json")
+    exs = scalar_examples(tmp_path)
+    out = tmp_path / "table.md"
+    result = runner.invoke(
+        app, ["compare", "-e", str(exs), "-j", f"J={saved}", "-o", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    assert out.read_text(encoding="utf-8").startswith("| Judge |")
+
+
+def test_compare_missing_judgments_file_is_usage_error(tmp_path):
+    exs = scalar_examples(tmp_path)
+    result = runner.invoke(
+        app, ["compare", "-e", str(exs), "-j", f"J={tmp_path / 'nope.json'}"]
+    )
+    assert result.exit_code == 2
+    assert "not found" in result.output
+
+
+# --- diff command ---------------------------------------------------------------
+
+
+def test_diff_terminal_renders(tmp_path):
+    a = _save_scalar_judgments(tmp_path, "a.json")
+    b = _save_scalar_judgments(tmp_path, "b.json")
+    exs = scalar_examples(tmp_path)
+    result = runner.invoke(
+        app, ["diff", "-e", str(exs), "-j", f"V1={a}", "-j", f"V2={b}"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "REPORT DIFF: V1 -> V2" in result.output
+
+
+def test_diff_markdown_to_file(tmp_path):
+    a = _save_scalar_judgments(tmp_path, "a.json")
+    b = _save_scalar_judgments(tmp_path, "b.json")
+    exs = scalar_examples(tmp_path)
+    out = tmp_path / "diff.md"
+    result = runner.invoke(
+        app,
+        ["diff", "-e", str(exs), "-j", f"V1={a}", "-j", f"V2={b}",
+         "-f", "markdown", "-o", str(out)],
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    assert out.read_text(encoding="utf-8").startswith("### Report diff: V1 -> V2")
+
+
+def test_diff_requires_exactly_two(tmp_path):
+    a = _save_scalar_judgments(tmp_path, "a.json")
+    exs = scalar_examples(tmp_path)
+    result = runner.invoke(app, ["diff", "-e", str(exs), "-j", f"V1={a}"])
+    assert result.exit_code == 2
+    assert "exactly two" in result.output
+
+
+def test_diff_unknown_format_is_usage_error(tmp_path):
+    a = _save_scalar_judgments(tmp_path, "a.json")
+    b = _save_scalar_judgments(tmp_path, "b.json")
+    exs = scalar_examples(tmp_path)
+    result = runner.invoke(
+        app, ["diff", "-e", str(exs), "-j", f"V1={a}", "-j", f"V2={b}", "-f", "bogus"]
+    )
+    assert result.exit_code == 2
+    assert "unknown format" in result.output

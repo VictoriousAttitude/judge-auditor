@@ -87,3 +87,93 @@ def test_consistent_pairwise_judge_passes_clean():
     assert r.position.flip_rate.point < 0.05
     assert r.overall == "HIGH"
     assert r.notes == []
+
+
+# --- Validity: a precise-but-wrong judge is caught (reliability != validity) -----
+
+
+def test_consistent_but_invalid_scalar_judge_is_downgraded():
+    # Reliable (high ICC) yet uncorrelated with the ground truth: the audit must
+    # downgrade it on validity even though every reliability signal is clean.
+    js, exs = S.scalar_judge_with_validity(rho=0.0, n_examples=150, runs=20, seed=11)
+    r = audit(js, exs)
+    assert r.consistency.icc_oneway is not None and r.consistency.icc_oneway.point >= 0.75
+    assert r.validity.available and r.validity.flagged
+    assert r.overall == "LOW"
+    assert any("validity" in n.lower() for n in r.notes)
+
+
+def test_consistent_but_invalid_pairwise_judge_is_downgraded():
+    js, exs = S.pairwise_judge_with_accuracy(0.5, n_examples=150, runs=16, seed=12)
+    r = audit(js, exs)
+    assert r.consistency.fleiss_kappa is not None and r.consistency.fleiss_kappa.point >= 0.95
+    assert r.validity.available and r.validity.flagged
+    assert r.overall == "LOW"
+    assert any("validity" in n.lower() for n in r.notes)
+
+
+def test_valid_scalar_judge_keeps_high_verdict():
+    js, exs = S.scalar_judge_with_validity(rho=0.9, n_examples=150, runs=20, seed=13)
+    r = audit(js, exs)
+    assert r.validity.available
+    assert not r.validity.flagged
+    assert r.validity.interpretation in ("good", "moderate")
+    assert r.overall == "HIGH"
+
+
+def test_validity_silent_without_ground_truth():
+    # The existing generators attach no labels: validity must stay unavailable and
+    # never touch the verdict (no regression for users without ground truth).
+    js, exs = S.scalar_judge(icc=0.90, n_examples=120, runs=20, quantize=True, seed=2)
+    r = audit(js, exs)
+    assert not r.validity.available
+    assert not r.validity.flagged
+    assert r.overall == "HIGH"
+
+
+# --- Rubric robustness: a verdict that depends on rubric phrasing is caught ------
+
+
+def test_brittle_scalar_rubric_judge_is_downgraded():
+    # Reliable under each rubric phrasing, yet the score depends on which phrasing was
+    # used: the audit must downgrade on rubric brittleness even though variant-0
+    # self-consistency is clean.
+    js, exs = S.scalar_judge_with_rubric_sensitivity(
+        sensitivity=1.0, n_variants=3, n_examples=120, runs=20, quantize=True, seed=21
+    )
+    r = audit(js, exs)
+    assert r.consistency.icc_oneway is not None and r.consistency.icc_oneway.point >= 0.75
+    assert r.rubric.available and r.rubric.flagged
+    assert r.overall == "LOW"
+    assert any("rubric" in n.lower() for n in r.notes)
+
+
+def test_brittle_pairwise_rubric_judge_is_downgraded():
+    js, exs = S.pairwise_judge_with_rubric_sensitivity(
+        flip_fraction=1.0, n_variants=3, n_examples=120, runs=16, seed=22
+    )
+    r = audit(js, exs)
+    assert r.consistency.fleiss_kappa is not None and r.consistency.fleiss_kappa.point >= 0.95
+    assert r.rubric.available and r.rubric.flagged
+    assert r.overall == "LOW"
+    assert any("rubric" in n.lower() for n in r.notes)
+
+
+def test_robust_rubric_judge_keeps_high_verdict():
+    js, exs = S.scalar_judge_with_rubric_sensitivity(
+        sensitivity=0.0, n_variants=3, n_examples=120, runs=20, quantize=True, seed=23
+    )
+    r = audit(js, exs)
+    assert r.rubric.available and not r.rubric.flagged
+    assert r.overall == "HIGH"
+    assert r.notes == []
+
+
+def test_rubric_robustness_silent_with_single_rubric():
+    # A single-rubric audit (the common case) must not gain a rubric flag and the
+    # headline metrics are unchanged (no regression).
+    js, exs = S.scalar_judge(icc=0.90, n_examples=120, runs=20, quantize=True, seed=2)
+    r = audit(js, exs)
+    assert not r.rubric.available
+    assert not r.rubric.flagged
+    assert r.overall == "HIGH"

@@ -123,7 +123,83 @@
     "winrate_power_curve": [],
     "required_pairs": null
   },
+  "validity": {
+    "mode": "scalar",
+    "available": true,
+    "n_labeled": 40,
+    "min_n": 8,
+    "interpretation": "good",
+    "flagged": false,
+    "pearson_r": {
+      "point": 0.81,
+      "low": 0.72,
+      "high": 0.88,
+      "confidence": 0.95
+    },
+    "spearman_rho": 0.8,
+    "spearman_p": 0.0,
+    "agreement_rate": null,
+    "cohen_kappa": null,
+    "accuracy_excl_ties": null,
+    "n_decisive": null
+  },
   "position": null,
+  "rubric": {
+    "mode": "scalar",
+    "available": true,
+    "n_variants": 3,
+    "n_examples": 40,
+    "min_n": 8,
+    "interpretation": "good",
+    "flagged": false,
+    "icc": {
+      "point": 0.84,
+      "low": 0.76,
+      "high": 0.9,
+      "confidence": 0.95
+    },
+    "mean_score_spread": 0.32,
+    "max_score_spread": 1.1,
+    "kappa": null,
+    "winner_flip_rate": null,
+    "n_flipped": null
+  },
+  "probe": {
+    "mode": "scalar",
+    "available": true,
+    "sycophancy": {
+      "kind": "sycophancy",
+      "mode": "scalar",
+      "n_examples": 40,
+      "min_n": 8,
+      "effect": {
+        "point": 0.03,
+        "low": -0.01,
+        "high": 0.07,
+        "confidence": 0.95
+      },
+      "flag_threshold": 0.05,
+      "severe_threshold": 0.15,
+      "flagged": false,
+      "raw_pts": 0.27
+    },
+    "anchoring": {
+      "kind": "anchoring",
+      "mode": "scalar",
+      "n_examples": 40,
+      "min_n": 8,
+      "effect": {
+        "point": 0.02,
+        "low": -0.02,
+        "high": 0.06,
+        "confidence": 0.95
+      },
+      "flag_threshold": 0.05,
+      "severe_threshold": 0.15,
+      "flagged": false,
+      "raw_pts": 0.18
+    }
+  },
   "overall": "HIGH",
   "notes": [],
   "recommendations": [

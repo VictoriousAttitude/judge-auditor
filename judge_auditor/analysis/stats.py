@@ -28,6 +28,8 @@ from scipy.stats import norm
 
 T = TypeVar("T")
 
+_EPS = 1e-12
+
 
 @dataclass(frozen=True)
 class CI:
@@ -123,6 +125,18 @@ _ICC_BANDS = (
     (1.01, "excellent"),
 )
 
+# Validity (judge-vs-ground-truth) correlation magnitude bands. Cohen (1988) calls
+# |r|=0.5 a "large" effect; we set the bar for trusting a judge deliberately higher
+# (a judge correlated only 0.5 with the truth still mislabels a lot), so "good" only
+# starts at 0.70. Bands apply to |r| (a strong *negative* correlation is still poor
+# validity — the judge is anti-correlated with the truth).
+_VALIDITY_BANDS = (
+    (0.30, "poor"),
+    (0.50, "weak"),
+    (0.70, "moderate"),
+    (1.01, "good"),
+)
+
 
 def interpret_kappa(value: float) -> str:
     """Plain-English agreement strength for a kappa value (Landis & Koch 1977)."""
@@ -142,3 +156,38 @@ def interpret_icc(value: float) -> str:
         if value < upper:
             return label
     return "excellent"
+
+
+def interpret_correlation(value: float) -> str:
+    """Plain-English validity band for a judge-vs-truth correlation (on |value|)."""
+    mag = abs(value)
+    for upper, label in _VALIDITY_BANDS:
+        if mag < upper:
+            return label
+    return "good"
+
+
+def cohen_kappa(labels_a: Sequence[T], labels_b: Sequence[T]) -> float:
+    """Cohen's kappa: chance-corrected agreement between two raters' labels.
+
+    ``labels_a`` and ``labels_b`` are paired, equal-length label sequences (here:
+    the judge's per-example verdict and the ground-truth verdict). Returns NaN for
+    fewer than two pairs. When both raters use a single category every pair agrees:
+    that is perfect (if degenerate) agreement, reported as 1.0.
+    """
+    n = len(labels_a)
+    if n != len(labels_b):
+        raise ValueError("label sequences must be the same length")
+    if n < 2:
+        return float("nan")
+
+    categories = set(labels_a) | set(labels_b)
+    observed = sum(a == b for a, b in zip(labels_a, labels_b, strict=True)) / n
+    expected = 0.0
+    for cat in categories:
+        p_a = sum(a == cat for a in labels_a) / n
+        p_b = sum(b == cat for b in labels_b) / n
+        expected += p_a * p_b
+    if abs(1.0 - expected) < _EPS:
+        return 1.0 if observed > 1.0 - _EPS else float("nan")
+    return (observed - expected) / (1.0 - expected)

@@ -8,6 +8,19 @@ SELF-CONSISTENCY (pairwise)
   Fleiss' kappa:  0.550 [0.450, 0.640]  [moderate]
   Mean agreement: 0.780   (min 0.500, median 0.810)
 
+VALIDITY (vs ground truth)
+  Cohen's kappa:        0.550 [0.440, 0.660]  [moderate]
+  Agreement rate:       0.780   flagged=False
+  Accuracy (excl ties): 0.800   (n=38)
+  Labeled examples:     40
+
+RUBRIC ROBUSTNESS (2 variants)
+  Cross-variant kappa: 0.720 [0.610, 0.820]  [substantial]
+  Winner flip rate:    10%   (4/40 examples)  flagged=False
+
+PROBE SENSITIVITY (injected suggestion)
+  Sycophancy  swing: 0.060 [-0.020, 0.140] win rate  (n=40)  flagged=False
+
 POSITION BIAS
   First-position rate: 0.570 [0.530, 0.610]   (p=0.001, favors: first)
   Flip rate:           0.150 [0.070, 0.280]   (6/40 examples)
