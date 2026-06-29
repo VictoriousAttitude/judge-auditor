@@ -4,11 +4,13 @@ import numpy as np
 from scipy.stats import pearsonr
 
 from judge_auditor import synthetic as S
+from judge_auditor.analysis.audit import audit
 from judge_auditor.analysis.consistency import consistency
 from judge_auditor.analysis.stats import cohen_kappa, interpret_correlation
 from judge_auditor.analysis.validity import _majority_winner, validity
 from judge_auditor.config import EvalExample, JudgeMode, Winner
 from judge_auditor.records import JudgmentRecord, JudgmentSet
+from judge_auditor.report.recommendations import recommendations
 
 
 def scalar_set(rows, runs: int = 4):
@@ -197,6 +199,24 @@ def test_consistent_but_invalid_scalar_judge_is_flagged():
     assert cons.icc_oneway is not None and cons.icc_oneway.point >= 0.75  # reliable
     assert val.flagged  # but invalid
     assert val.interpretation == "poor"
+
+
+# --- validity feeds the recommendation layer ------------------------------------
+
+
+def test_scalar_invalid_judge_yields_validity_recommendation():
+    rng = np.random.default_rng(0)
+    rows = [(float(q), float(rng.integers(1, 11))) for q in range(40)]  # score independent of q
+    js, exs = scalar_set(rows)
+    recs = recommendations(audit(js, exs))
+    assert any("Low validity" in r and "r=" in r for r in recs)
+
+
+def test_pairwise_invalid_judge_yields_validity_recommendation():
+    rows = [(Winner.A if i % 2 else Winner.B, Winner.A) for i in range(40)]  # always says A
+    js, exs = pairwise_set(rows)
+    recs = recommendations(audit(js, exs))
+    assert any("Low validity" in r and "kappa=" in r for r in recs)
 
 
 def test_pairwise_known_accuracy_is_recovered():
