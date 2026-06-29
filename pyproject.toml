@@ -61,7 +61,10 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "judge_auditor/cli.py" = ["B008"]
 
 [tool.mypy]
-python_version = "3.11"
+# No pinned python_version: mypy targets the running interpreter. numpy >= 2.5
+# (Python 3.12+ only) ships stubs using PEP 695 `type` statements that mypy
+# rejects under a 3.11 target; the CI 3.11 job still gets numpy 2.4.x and so
+# keeps verifying our 3.11 floor, while the 3.12 job parses the newer stubs.
 strict = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
