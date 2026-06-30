@@ -92,7 +92,7 @@ def _validity_rec(report: ReliabilityReport) -> str | None:
             "raw agreement). A self-consistent judge can still be wrong — revise the "
             "rubric against your labels, or use a stronger judge model."
         )
-    return None
+    return None  # pragma: no cover - a flagged result always carries its metric
 
 
 def _rubric_rec(report: ReliabilityReport) -> str | None:
@@ -113,7 +113,7 @@ def _rubric_rec(report: ReliabilityReport) -> str | None:
             "Pin one canonical rubric wording or sharpen the comparison criteria so the "
             "verdict is phrasing-independent."
         )
-    return None
+    return None  # pragma: no cover - a flagged result always carries its metric
 
 
 def _probe_rec(report: ReliabilityReport) -> str | None:

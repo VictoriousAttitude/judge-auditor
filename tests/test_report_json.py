@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+from enum import Enum
 
 from judge_auditor.analysis.audit import audit
-from judge_auditor.report.json_report import render_json, report_to_dict
+from judge_auditor.report.json_report import _jsonable, render_json, report_to_dict
 from judge_auditor.report.recommendations import recommendations
 
 from .test_audit import (
@@ -12,6 +13,16 @@ from .test_audit import (
     position_biased_pairwise,
     reliable_scalar,
 )
+
+
+class _PlainEnum(Enum):
+    X = 1
+
+
+def test_jsonable_handles_plain_enum_dict_and_fallback():
+    assert _jsonable(_PlainEnum.X) == 1  # non-str enum serialized by value
+    assert _jsonable({"k": 1.0, 2: "v"}) == {"k": 1.0, "2": "v"}  # dict keys stringified
+    assert _jsonable(object()).startswith("<object")  # last-resort str() fallback
 
 
 def test_render_json_is_valid_and_has_no_nan():
