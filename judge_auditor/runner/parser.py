@@ -50,7 +50,7 @@ def _from_json(text: str) -> PairwiseChoice | None:
             obj = json.loads(match.group(0))
         except (json.JSONDecodeError, ValueError):
             continue
-        if not isinstance(obj, dict):
+        if not isinstance(obj, dict):  # pragma: no cover - a {...} block always loads to a dict
             continue
         for key in _VERDICT_KEYS:
             if key in obj:
@@ -112,7 +112,7 @@ def _score_from_json(text: str) -> float | None:
             obj = json.loads(match.group(0))
         except (json.JSONDecodeError, ValueError):
             continue
-        if not isinstance(obj, dict):
+        if not isinstance(obj, dict):  # pragma: no cover - a {...} block always loads to a dict
             continue
         for key in _SCORE_KEYS:
             if key in obj:

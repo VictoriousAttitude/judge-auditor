@@ -145,6 +145,21 @@ async def test_retry_after_header_is_honored_over_jitter(config, monkeypatch):
     await backend.aclose()
 
 
+async def test_non_numeric_retry_after_falls_back_to_jitter(monkeypatch):
+    slept: list[float] = []
+
+    async def _record_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr("asyncio.sleep", _record_sleep)
+    backend = AnthropicBackend(api_key="test")
+    # A malformed retry-after header can't be parsed, so jittered backoff is used.
+    await backend._backoff(0, retry_after="soon")
+    assert len(slept) == 1
+    assert slept[0] > 0  # jittered delay, not the un-parseable header
+    await backend.aclose()
+
+
 @respx.mock
 async def test_sends_version_and_key_headers(config):
     captured: dict = {}

@@ -256,6 +256,53 @@ async def test_probe_prefix_appears_in_prompt(scalar_examples):
     assert any(t.startswith("BASE") for t in texts)
 
 
+async def test_system_prompt_is_prepended(scalar_examples):
+    seen: list[list[dict[str, str]]] = []
+
+    def capture(messages, config):
+        seen.append(messages)
+        return '{"score": 5}'
+
+    cfg = JudgeConfig(
+        model="m",
+        prompt_template="Q: {prompt}\nR: {response}\nScore 1-10.",
+        mode=JudgeMode.SCALAR,
+        system_prompt="You are a strict grader.",
+    )
+    ex = JudgeExecutor(MockBackend(capture), cfg, AuditConfig(runs_per_example=1))
+    await ex.run(scalar_examples[:1])
+    assert seen[0][0] == {"role": "system", "content": "You are a strict grader."}
+    assert seen[0][-1]["role"] == "user"
+
+
+async def test_scalar_parse_failures_are_recorded(scalar_config, scalar_examples):
+    ex = JudgeExecutor(
+        MockBackend(malformed), scalar_config, AuditConfig(runs_per_example=3)
+    )
+    result = await ex.run(scalar_examples)
+    assert result.parse_failure_rate == 1.0
+    for r in result.records:
+        assert not r.parse_ok
+        assert r.score is None
+        assert r.parse_error
+
+
+async def test_checkpoint_skips_blank_lines(tmp_path, scalar_config, scalar_examples):
+    # A checkpoint file padded with blank lines must load cleanly.
+    ckpt = tmp_path / "audit.jsonl"
+    audit = AuditConfig(runs_per_example=1, checkpoint_path=str(ckpt))
+    backend1 = MockBackend(content_score_scalar)
+    await JudgeExecutor(backend1, scalar_config, audit).run(scalar_examples)
+
+    contents = ckpt.read_text(encoding="utf-8")
+    ckpt.write_text("\n" + contents + "\n\n", encoding="utf-8")
+
+    backend2 = MockBackend(content_score_scalar)
+    result = await JudgeExecutor(backend2, scalar_config, audit).run(scalar_examples)
+    assert backend2.call_count == 0  # everything resolved from the checkpoint
+    assert len(result) == len(scalar_examples)
+
+
 async def test_variants_render_different_prompts(scalar_examples):
     seen: list[str] = []
 

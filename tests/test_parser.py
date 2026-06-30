@@ -149,3 +149,28 @@ def test_parse_scalar_adversarial_failures(text: str) -> None:
     score, err = parse_scalar(text, 1.0, 10.0)
     assert score is None
     assert err is not None
+
+
+# --- Malformed brace blocks: the JSON strategy must skip and fall through -------
+
+
+def test_parse_pairwise_skips_unparseable_brace_block() -> None:
+    # The {...} block is not valid JSON, so the JSON strategy continues and the
+    # labelled-mention fallback decides the verdict.
+    choice, err = parse_pairwise("{not valid json} Response A wins")
+    assert err is None
+    assert choice is PairwiseChoice.FIRST
+
+
+def test_parse_scalar_skips_unparseable_brace_block() -> None:
+    score, err = parse_scalar("{not valid json} Score: 7", 1.0, 10.0)
+    assert err is None
+    assert score == 7.0
+
+
+def test_parse_scalar_skips_non_numeric_json_score() -> None:
+    # JSON carries a score key but its value can't be coerced to float, so the
+    # JSON strategy continues and the labelled score is used instead.
+    score, err = parse_scalar('{"score": "high"} Score: 7', 1.0, 10.0)
+    assert err is None
+    assert score == 7.0

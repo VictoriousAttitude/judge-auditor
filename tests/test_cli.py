@@ -89,6 +89,40 @@ def test_build_backend_unknown_raises():
         build_backend("bogus", None)
 
 
+def test_build_backend_anthropic_with_base_url(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    be = build_backend("anthropic", "http://localhost:8000")
+    assert be.base_url == "http://localhost:8000"
+
+
+async def test_execute_closes_backend_with_aclose(tmp_path):
+    from judge_auditor.cli import _execute
+    from judge_auditor.config import AuditConfig, JudgeConfig, JudgeMode
+    from judge_auditor.runner.backends.mock import MockBackend
+    from judge_auditor.runner.executor import JudgeExecutor
+
+    closed: list[bool] = []
+
+    class ClosableBackend(MockBackend):
+        async def aclose(self) -> None:
+            closed.append(True)
+
+    def responder(messages, config):
+        return '{"score": 5}'
+
+    cfg = JudgeConfig(
+        model="m",
+        prompt_template="Q: {prompt}\nR: {response}\nScore 1-10.",
+        mode=JudgeMode.SCALAR,
+    )
+    backend = ClosableBackend(responder)
+    executor = JudgeExecutor(backend, cfg, AuditConfig(runs_per_example=1))
+    exs = load_examples(scalar_examples(tmp_path))
+    js = await _execute(executor, backend, exs)
+    assert len(js) == len(exs)
+    assert closed == [True]  # the finally block awaited aclose
+
+
 # --- run command (mock backend, no network) -------------------------------------
 
 

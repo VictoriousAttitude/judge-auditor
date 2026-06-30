@@ -47,7 +47,9 @@ def probe_prefix(
             return _anchor_text(score_max, score_max)
         if probe is Probe.ANCHOR_DOWN:
             return _anchor_text(score_min, score_max)
-        raise ValueError(f"probe {probe} is not applicable to scalar mode")
+        raise ValueError(  # pragma: no cover - all Probe members are handled above
+            f"probe {probe} is not applicable to scalar mode"
+        )
 
     # Pairwise: sycophancy only, phrased against the presented label of the target.
     if probe in (Probe.SYCOPHANCY_UP, Probe.SYCOPHANCY_DOWN):

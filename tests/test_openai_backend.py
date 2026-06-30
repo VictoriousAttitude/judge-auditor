@@ -146,3 +146,18 @@ async def test_retry_after_header_is_honored_over_jitter(config, monkeypatch):
     assert resp.text == '{"score": 9}'
     assert slept == [2.5]  # exact server-specified wait, not the jittered backoff
     await backend.aclose()
+
+
+async def test_non_numeric_retry_after_falls_back_to_jitter(monkeypatch):
+    slept: list[float] = []
+
+    async def _record_sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr("asyncio.sleep", _record_sleep)
+    backend = OpenAIBackend(api_key="test")
+    # An un-parseable retry-after header falls through to jittered backoff.
+    await backend._backoff(0, retry_after="later")
+    assert len(slept) == 1
+    assert slept[0] > 0
+    await backend.aclose()
