@@ -112,7 +112,7 @@ def _scalar_rows(js: JudgmentSet) -> list[npt.NDArray[np.float64]]:
     if len(kept) < 2:
         return []
     m = min(len(v) for v in kept)
-    if m < 2:
+    if m < 2:  # pragma: no cover - kept already filters to len >= 2, so m >= 2
         return []
     return [np.asarray(v[:m], dtype=float) for v in kept]
 

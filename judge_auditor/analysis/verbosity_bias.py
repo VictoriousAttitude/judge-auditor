@@ -168,7 +168,7 @@ def _stratify_length_effect(
         if not short or not long:  # median sat at an extreme; split the other way
             short = [s[k] for k in range(len(ln)) if ln[k] <= med]
             long = [s[k] for k in range(len(ln)) if ln[k] > med]
-        if not short or not long:
+        if not short or not long:  # pragma: no cover - non-constant lengths always split
             continue
         mean_short = float(np.mean(short))
         mean_long = float(np.mean(long))

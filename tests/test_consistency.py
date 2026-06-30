@@ -145,3 +145,18 @@ def test_consistency_handles_too_few_examples():
     res = consistency(scalar_set(np.array([[5.0, 5.0, 5.0]])), n_boot=50)
     assert res.icc_oneway is None
     assert res.runs_per_example == 0
+
+
+def test_fleiss_kappa_single_rating_is_nan():
+    # A row with only one rating (m < 2) is undefined.
+    assert np.isnan(fleiss_kappa(np.array([[1.0, 0.0, 0.0]])))
+
+
+def test_consistency_pairwise_too_few_examples():
+    # Only one example has >= 2 winner ratings, so the kappa basis is empty.
+    rows = [[Winner.A, Winner.A]]
+    res = consistency(pairwise_set(rows), n_boot=50)
+    assert res.mode is JudgeMode.PAIRWISE
+    assert res.fleiss_kappa is None
+    assert res.n_examples == 0
+    assert res.runs_per_example == 0

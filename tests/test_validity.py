@@ -233,3 +233,28 @@ def test_consistent_but_invalid_pairwise_judge_is_flagged():
     val = validity(js, exs, n_boot=800)
     assert cons.fleiss_kappa is not None and cons.fleiss_kappa.point >= 0.95  # reliable
     assert val.flagged  # but no better than a coin vs the truth
+
+
+def test_scalar_validity_skips_labeled_example_with_no_scores():
+    # A labeled example whose every run failed to parse contributes no score pair.
+    js, exs = scalar_set([(1.0, 2.0), (2.0, 4.0), (3.0, 6.0)])
+    bad_id = "no_scores"
+    exs.append(EvalExample(id=bad_id, prompt="p", response_a="r", quality_label=9.0))
+    js.records.append(JudgmentRecord(bad_id, 0, 0, None, "junk", False, parse_error="x"))
+    res = validity(js, exs, n_boot=100)
+    assert res.available is True
+    assert res.n_labeled == 3  # the unparseable example is excluded
+
+
+def test_pairwise_validity_skips_labeled_example_with_no_winners():
+    js, exs = pairwise_set([(Winner.A, Winner.A), (Winner.B, Winner.B), (Winner.A, Winner.A)])
+    bad_id = "no_winners"
+    exs.append(
+        EvalExample(
+            id=bad_id, prompt="p", response_a="a", response_b="b", preferred_winner=Winner.A
+        )
+    )
+    js.records.append(JudgmentRecord(bad_id, 0, 0, "AB", "junk", False, parse_error="x"))
+    res = validity(js, exs, n_boot=100)
+    assert res.available is True
+    assert res.n_labeled == 3

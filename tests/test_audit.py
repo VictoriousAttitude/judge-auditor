@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from judge_auditor.analysis.audit import audit
+from judge_auditor.analysis.audit import _base_level, audit
 from judge_auditor.config import EvalExample, JudgeMode, PairwiseChoice, Winner
 from judge_auditor.records import JudgmentRecord, JudgmentSet
 from judge_auditor.report.terminal import render_terminal
@@ -129,3 +129,54 @@ def test_render_terminal_pairwise_contains_position_section():
     assert "POSITION BIAS" in out
     assert "FLAGS" in out
     assert "JUDGE RELIABILITY: LOW" in out
+
+
+def test_base_level_none_point_is_low():
+    assert _base_level(JudgeMode.SCALAR, None) == "LOW"
+    assert _base_level(JudgeMode.PAIRWISE, None) == "LOW"
+
+
+def test_verbosity_global_and_stratified_notes_downgrade():
+    # Within each discrete quality stratum, score rises with response length: both
+    # the global and the within-stratum verbosity flags fire and emit their notes.
+    rng = np.random.default_rng(1)
+    examples, records = [], []
+    idx = 0
+    for q in (1.0, 2.0):
+        for k in range(10):
+            eid = f"ex{idx}"
+            idx += 1
+            length = 5 + k * 10
+            base = q * 0.4 + k * 0.8 + 0.5
+            examples.append(
+                EvalExample(id=eid, prompt="q", response_a=words(length), quality_label=q)
+            )
+            for j in range(8):
+                s = base + rng.normal(0, 0.1)
+                records.append(JudgmentRecord(eid, j, 0, None, str(s), True, score=s))
+    rep = audit(JudgmentSet(JudgeMode.SCALAR, "judge-x", records), examples)
+    assert rep.verbosity.flagged
+    assert rep.verbosity.stratified_flagged
+    assert any("Verbosity bias: length Spearman rho=" in n for n in rep.notes)
+    assert any("Verbosity bias within quality=" in n for n in rep.notes)
+    assert rep.overall in ("LOW", "MODERATE")
+
+
+def test_render_terminal_includes_within_quality_strata():
+    rng = np.random.default_rng(1)
+    examples, records = [], []
+    idx = 0
+    for q in (1.0, 2.0):
+        for k in range(10):
+            eid = f"ex{idx}"
+            idx += 1
+            base = q * 0.4 + k * 0.8 + 0.5
+            examples.append(
+                EvalExample(id=eid, prompt="q", response_a=words(5 + k * 10), quality_label=q)
+            )
+            for j in range(8):
+                s = base + rng.normal(0, 0.1)
+                records.append(JudgmentRecord(eid, j, 0, None, str(s), True, score=s))
+    out = render_terminal(audit(JudgmentSet(JudgeMode.SCALAR, "judge-x", records), examples))
+    assert "Within-quality strata" in out
+    assert "<-- flagged" in out

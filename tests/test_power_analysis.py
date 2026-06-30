@@ -102,3 +102,21 @@ def test_empty_scalar_set_is_safe():
     res = power_analysis(js)
     assert res.n_examples == 0
     assert res.mde is None
+
+
+def test_pairwise_required_pairs_for_target_margin():
+    # A discriminating judge (mostly-agreeing) with a target effect yields required_pairs.
+    js = pairwise_set([[Winner.A] * 8 for _ in range(20)])
+    res = power_analysis(js, target_effect=0.1)
+    assert res.discriminability is not None and res.discriminability > 0
+    assert res.required_pairs is not None and res.required_pairs >= 1
+
+
+def test_pairwise_no_multi_run_examples_is_unavailable():
+    # Every example has a single winner rating: effective accuracy is undefined.
+    js = pairwise_set([[Winner.A], [Winner.B], [Winner.A]])
+    res = power_analysis(js, target_effect=0.1)
+    assert res.n_examples == 0
+    assert res.effective_accuracy is not None and math.isnan(res.effective_accuracy)
+    assert res.mde_winrate is None
+    assert res.required_pairs is None

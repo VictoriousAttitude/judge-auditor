@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from judge_auditor.analysis.stats import (
     bootstrap_ci,
+    cohen_kappa,
+    interpret_correlation,
     interpret_icc,
     interpret_kappa,
     wilson_ci,
@@ -94,3 +97,14 @@ def test_interpret_icc_bands():
     assert interpret_icc(0.6) == "moderate"
     assert interpret_icc(0.8) == "good"
     assert interpret_icc(0.95) == "excellent"
+
+
+def test_interpret_bands_above_sentinel_fall_through():
+    # A value past the top band sentinel falls through to the best label.
+    assert interpret_kappa(2.0) == "almost perfect"
+    assert interpret_correlation(2.0) == "good"
+
+
+def test_cohen_kappa_unequal_lengths_raises():
+    with pytest.raises(ValueError, match="same length"):
+        cohen_kappa(["A", "B"], ["A"])

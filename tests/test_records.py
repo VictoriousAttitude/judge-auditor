@@ -46,3 +46,8 @@ def test_set_save_load_json(tmp_path):
     js.save_json(path)
     loaded = JudgmentSet.load_json(path)
     assert loaded.records[0].winner is Winner.A
+
+
+def test_empty_set_parse_failure_rate_is_zero():
+    js = JudgmentSet(mode=JudgeMode.SCALAR, model="mock", records=[])
+    assert js.parse_failure_rate == 0.0

@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from judge_auditor.analysis.verbosity_bias import verbosity_bias, word_count
+from judge_auditor.analysis.verbosity_bias import (
+    _stratify_length_effect,
+    verbosity_bias,
+    word_count,
+)
 from judge_auditor.config import EvalExample, JudgeMode, Winner
 from judge_auditor.records import JudgmentRecord, JudgmentSet
 
@@ -189,3 +193,62 @@ def test_no_quality_label_skips_stratification():
     res = verbosity_bias(js, examples)  # examples carry no quality_label
     assert res.strata is None
     assert not res.stratified_flagged
+
+
+def test_scalar_lengths_override_is_used():
+    js, examples = scalar_case({10: 5.0})
+    eid = examples[0].id
+    res = verbosity_bias(js, examples, lengths={eid: 999})
+    assert res.n_examples == 1  # the override-length branch executed
+
+
+def test_scalar_skips_record_for_unknown_example():
+    js, examples = scalar_case({10: 5.0, 20: 6.0})
+    js.records.append(JudgmentRecord("ghost", 0, 0, None, "5", True, score=5.0))
+    res = verbosity_bias(js, examples)
+    assert res.n_examples == 2  # the ghost example (absent from examples) is skipped
+
+
+def test_scalar_skips_example_with_no_parsed_scores():
+    js, examples = scalar_case({10: 5.0, 20: 6.0})
+    examples.append(EvalExample(id="bad", prompt="q", response_a=words(30)))
+    js.records.append(JudgmentRecord("bad", 0, 0, None, "junk", False, parse_error="x"))
+    res = verbosity_bias(js, examples)
+    assert res.n_examples == 2  # the all-unparseable example is skipped
+
+
+def test_pairwise_skips_example_without_response_b():
+    examples = [
+        EvalExample(id="ok", prompt="q", response_a=words(10), response_b=words(20)),
+        EvalExample(id="nob", prompt="q", response_a=words(10), response_b=None),
+    ]
+    records = [
+        JudgmentRecord("ok", 0, 0, "AB", "x", True, winner=Winner.A),
+        JudgmentRecord("ok", 1, 0, "BA", "x", True, winner=Winner.B),
+        JudgmentRecord("nob", 0, 0, "AB", "x", True, winner=Winner.A),
+    ]
+    js = JudgmentSet(JudgeMode.PAIRWISE, "m", records)
+    res = verbosity_bias(js, examples)
+    assert res.n_examples == 1  # the response_b-less example is skipped
+
+
+def test_stratify_skips_undersized_stratum():
+    quals = [0.0] * 8 + [1.0] * 3
+    scores = [float(x) for x in (1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3)]
+    lens = [float(x) for x in (1, 2, 3, 4, 5, 6, 7, 8, 1, 1, 1)]
+    out = _stratify_length_effect(
+        scores, lens, quals,
+        max_strata=6, min_stratum_n=8, threshold=0.3, p_threshold=0.05,
+    )
+    assert [se.quality for se in out] == [0.0]  # the 3-example stratum is dropped
+
+
+def test_stratify_alternate_split_when_median_at_minimum():
+    quals = [0.0] * 8 + [1.0] * 8
+    lens = [float(x) for x in (1, 1, 1, 1, 1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8)]
+    scores = [float(x) for x in (5, 6, 4, 7, 3, 8, 2, 9, 1, 2, 3, 4, 5, 6, 7, 8)]
+    out = _stratify_length_effect(
+        scores, lens, quals,
+        max_strata=6, min_stratum_n=4, threshold=0.3, p_threshold=0.05,
+    )
+    assert sorted(se.quality for se in out) == [0.0, 1.0]
